@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name" translatable="false">SherpaTTS</string>
+    <string name="app_name" translatable="false">KoSpeaker</string>
     <string name="start_main">START</string>
     <string name="error_download">Download error</string>
     <string name="dialog_StarOnGitHub">Do you like this app? Please give a star on GitHub or buy the developer a coffee via PayPal.</string>
