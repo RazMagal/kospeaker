@@ -1,17 +1,13 @@
+# Android / Gradle / IntelliJ IDEA
 *.iml
-.gradle
+.gradle/
 /local.properties
-./idea
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
+local.properties
+.idea/
+build/
 /captures
+*.apk
+*.aab
 .externalNativeBuild
 .cxx
-local.properties
-/.idea/kotlinc.xml
+.DS_Store
