@@ -41,7 +41,9 @@ android {
 
     java {
         toolchain {
-            languageVersion.set(JavaLanguageVersion.of(11))
+            // JDK 17 matches the CI runner and modern AGP; keeps toolchain
+            // provisioning trivial (no JDK 11 needed on the build machine).
+            languageVersion.set(JavaLanguageVersion.of(17))
         }
     }
 
@@ -72,4 +74,6 @@ dependencies {
     implementation("com.github.woheller69:FreeDroidWarn:+")
     implementation("org.jsoup:jsoup:1.22.1")
     implementation ("androidx.work:work-runtime:2.10.2")
+
+    testImplementation("junit:junit:4.13.2")
 }

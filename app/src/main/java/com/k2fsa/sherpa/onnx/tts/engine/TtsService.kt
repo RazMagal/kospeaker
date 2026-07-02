@@ -7,6 +7,8 @@ import android.speech.tts.SynthesisRequest
 import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.util.Log
+import com.k2fsa.sherpa.onnx.tts.engine.reading.SentenceChunker
+import com.k2fsa.sherpa.onnx.tts.engine.reading.TextNormalizer
 
 
 class TtsService : TextToSpeechService() {
@@ -14,6 +16,11 @@ class TtsService : TextToSpeechService() {
     // Member variables to hold state for the callback
     private var currentPitch = 100f
     private var currentSynthesisCallback: SynthesisCallback? = null
+
+    // Set by onStop() (framework thread) and read by the synthesis thread, so it
+    // must be @Volatile. Lets Stop interrupt chunk streaming quickly on slow e-ink CPUs.
+    @Volatile
+    private var stopRequested = false
 
     override fun onCreate() {
         Log.i(TAG, "onCreate tts service")
@@ -63,7 +70,12 @@ class TtsService : TextToSpeechService() {
         }
     }
 
-    override fun onStop() {}
+    override fun onStop() {
+        // Called on a separate thread when playback is interrupted. Flip the flag
+        // so the chunk loop in onSynthesizeText breaks between chunks and the
+        // in-flight ttsCallback returns 0 to abort the current chunk promptly.
+        stopRequested = true
+    }
 
     override fun onSynthesizeText(request: SynthesisRequest?, callback: SynthesisCallback?) {
         Log.i(TAG, "onSynthesizeText")
@@ -94,7 +106,10 @@ class TtsService : TextToSpeechService() {
 
         if (preferenceHelper.getStripSSML()) text = TtsEngine.stripSsmlTags(text)
 
-
+        // --- Reading pipeline (see package com.k2fsa.sherpa.onnx.tts.engine.reading) ---
+        // Clean up raw EPUB prose so the neural voice sounds natural: expand
+        // abbreviations, turn spaced dashes into pauses, drop footnote artifacts, etc.
+        text = TextNormalizer.normalize(text)
 
         val tts = TtsEngine.tts!!
 
@@ -108,14 +123,23 @@ class TtsService : TextToSpeechService() {
         // Store state in member variables so the function reference can access them
         currentPitch = pitch
         currentSynthesisCallback = callback
+        stopRequested = false
 
-        // FIX: Use a function reference (::ttsCallback) instead of an inline lambda.
-        // This forces the Kotlin compiler to generate the correct JNI signature: ([F)Ljava/lang/Integer;
-        tts.generateWithConfigAndCallback(
-            text = text,
-            config = GenerationConfig(sid = TtsEngine.speakerId.value, speed = TtsEngine.speed.value),
-            callback = ::ttsCallback,
-        )
+        // Split the utterance into sentence-sized chunks and synthesize them in
+        // order. Streaming chunk-by-chunk lowers first-audio latency on weak e-ink
+        // CPUs and lets onStop() interrupt between chunks (see SentenceChunker).
+        val chunks = SentenceChunker.chunk(text)
+        for (chunk in chunks) {
+            if (stopRequested) break
+
+            // FIX: Use a function reference (::ttsCallback) instead of an inline lambda.
+            // This forces the Kotlin compiler to generate the correct JNI signature: ([F)Ljava/lang/Integer;
+            tts.generateWithConfigAndCallback(
+                text = chunk,
+                config = GenerationConfig(sid = TtsEngine.speakerId.value, speed = TtsEngine.speed.value),
+                callback = ::ttsCallback,
+            )
+        }
 
         callback.done()
 
@@ -158,9 +182,9 @@ class TtsService : TextToSpeechService() {
             offset += bytesToWrite
         }
 
-        // 1 means to continue
-        // 0 means to stop
-        return 1
+        // 1 means to continue, 0 means to stop.
+        // Abort the current chunk promptly if Stop was pressed (see onStop()).
+        return if (stopRequested) 0 else 1
     }
 
     private fun floatArrayToByteArray(audio: FloatArray): ByteArray {
