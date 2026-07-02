@@ -1,88 +1,86 @@
- ```
-Google has announced that, starting in 2026/2027, all apps on certified Android devices
-will require the developer to submit personal identity details directly to Google.
-Since the developers of this app do not agree to this requirement, this app will no longer 
-work on certified Android devices after that time.
+# KoSpeaker
+
+![CI](https://github.com/RazMagal/kospeaker/actions/workflows/ci.yml/badge.svg)
+
+**A natural-sounding, fully offline system Text-to-Speech engine for Android — built to give KOReader on Onyx Boox e-ink devices a human-quality voice for Read Aloud of EPUBs.**
+
+KoSpeaker registers itself as an Android system TTS engine and runs small neural voices (Piper by default) entirely on-device. Set it as your default TTS and every app that speaks — including KOReader's Read Aloud — instantly sounds natural, with no cloud, no account, and no network access after the one-time voice download.
+
+---
+
+## Why
+
+E-ink readers like the Onyx Boox are wonderful for long-form reading, but their stock offline voices are non-neural (eSpeak / RHVoice-class). They work, but they sound flat and robotic — tiring over a full book. The obvious alternatives are cloud TTS engines, which defeat the point of an offline reader, drain battery, and raise privacy concerns.
+
+KoSpeaker fixes the root cause: it replaces the robotic offline voice with a **small neural speaking model** that runs in real time on modest ARM hardware, so Read Aloud sounds like a person — and stays 100% offline.
+
+## How it works
+
+KOReader on Android has no speech synthesis of its own. Its Read Aloud plugin (`audiobook.koplugin`) wraps Android's system `android.speech.tts.TextToSpeech` API and speaks using whichever engine is set as the device **default TTS**.
+
+KoSpeaker plugs into that exact seam:
+
+1. It declares an `android.intent.action.TTS_SERVICE`, so Android lists it as an available TTS engine.
+2. You select KoSpeaker as the **default** engine in Android settings.
+3. From then on KOReader — and any other app — synthesizes speech through KoSpeaker.
+
+After you download a voice once, no further network access is needed. Synthesis, text handling, and audio all happen locally on the device.
+
+## Features
+
+- **Neural offline voices via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx).** Piper voices (VITS exported to ONNX) are the default: tiny (~30 MB), fast, and comfortably real-time on weak ARM CPUs — ideal for e-ink devices.
+- **Kokoro-82M high-quality mode (planned).** An optional richer-prosody engine (~80 MB, heavier) for users who prioritize voice quality over speed. See the [roadmap](ROADMAP.md).
+- **Reading pipeline built for prose.** Incoming EPUB text is normalized (whitespace, punctuation, abbreviations, and stray markup cleaned up) and split into sentence-sized chunks that are streamed to the audio output. Sentence chunking keeps latency low so playback starts quickly and page turns feel responsive on slow e-ink refresh.
+- **Built-in voice downloader.** Install and manage Piper voices from the in-app *Manage Languages* screen; this is the only moment the app touches the network.
+- **Standard system engine.** Works with KOReader, but also with any Android app that uses system TTS.
+
+## Install
+
+- **Build from source** — see [Build](#build) below. Recommended while KoSpeaker is under active development.
+- **CI artifact** — each push produces a debug APK as a CI build artifact you can sideload.
+- **F-Droid (upstream)** — KoSpeaker itself is not on F-Droid. Its upstream base, SherpaTTS, is available on [F-Droid](https://f-droid.org/packages/org.woheller69.ttsengine/) if you want to try the unmodified engine first.
+
+## Quick start on Onyx Boox + KOReader
+
+Full, step-by-step instructions live in **[docs/KOREADER_SETUP.md](docs/KOREADER_SETUP.md)**. In short:
+
+1. Build or sideload the KoSpeaker APK and open it.
+2. Download a Piper English voice from *Manage Languages*.
+3. In Android **Settings → System → Languages & input → Text-to-speech output**, set **KoSpeaker** as the default engine and tune speech rate/pitch.
+4. Install `audiobook.koplugin` into KOReader, open an EPUB, and start **Read Aloud**.
+
+## Build
+
+Requirements:
+
+- JDK 17
+- Android SDK (compileSdk 35; min SDK 29)
+
+Common tasks:
+
+```bash
+# Build a debug APK (output under app/build/outputs/apk/)
+./gradlew assembleDebug
+
+# Run unit tests
+./gradlew testDebugUnitTest
 ```
 
-## Donate
-<pre>Send a coffee to 
-woheller69@t-online.de 
-<a href= "https://www.paypal.com/signin"><img  align="left" src="https://www.paypalobjects.com/webstatic/de_DE/i/de-pp-logo-150px.png"></a>
+The native neural runtime is pulled in as the `com.github.k2-fsa:sherpa-onnx` dependency, so no manual NDK setup is required for a standard build.
 
-  
-Or via this link (with fees)
-<a href="https://www.paypal.com/donate?hosted_button_id=XVXQ54LBLZ4AA"><img  align="left" src="https://img.shields.io/badge/Donate%20with%20Debit%20or%20Credit%20Card-002991?style=plastic"></a></pre>
-# SherpaTTS
+## Roadmap
 
-SherpaTTS is an Android Text-to-Speech engine based on Next-gen Kaldi. It uses voices from [Piper Voices](https://rhasspy.github.io/piper-samples/) or [Coqui](https://github.com/coqui-ai/TTS/).
+Planned milestones — Kokoro-82M optional engine, e-ink-friendly UI, a one-tap "set as default + KOReader setup" helper, per-book presets, and CI release APKs — are tracked in **[ROADMAP.md](ROADMAP.md)**. The iterative, LLM-driven development methodology behind the project is described in **[LOOP.md](LOOP.md)**.
 
-<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" width="150"/> <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02.png" width="150"/>
+## Credits & License
 
-[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" height="75">](https://f-droid.org/de/packages/org.woheller69.ttsengine/) [<img src="https://www.openapk.net/images/openapk-badge.png" height="75">]( https://www.openapk.net/ttsengine/org.woheller69.ttsengine/)
+KoSpeaker is a fork of **[woheller69/ttsEngine ("SherpaTTS")](https://github.com/woheller69/ttsEngine)** — GPLv3, © woheller69 — and builds on that project's proven e-ink support and built-in Piper voice downloader.
 
-## Installing Voice Models
+It stands on:
 
-### From Hugging Face
-The app provides a built-in model downloader that lets you install Piper and Coqui voice models directly from the "Manage Languages" screen. Simply select a language and the app will download and install the model automatically.
-Please note that this is the only instance where internet permission is required.
-Once the model is downloaded, text-to-speech works entirely offline, ensuring your privacy and convenience.
-Voices can be tested [here](https://huggingface.co/spaces/k2-fsa/text-to-speech/).
+- **[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)** (k2-fsa) — Apache-2.0 — neural TTS runtime.
+- **[Piper](https://github.com/rhasspy/piper)** / **[Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)** — the neural voice models (Apache-2.0 class).
+- **[eSpeak NG](https://github.com/espeak-ng/espeak-ng)** — GPLv3 — phonemization data.
+- **[jsoup](https://github.com/jhy/jsoup)** — MIT — HTML/text handling.
 
-### From SD Card (Sideloading)
-You can install custom Piper models directly from your device storage:
-
-1. Open the app and go to "Manage Languages"
-2. Tap "Install from SD Card"
-3. Enter a 3-letter language code (e.g., `eng`, `deu`, `fra`)
-4. Enter a model name (this will be displayed in the language list)
-5. Select your model file (`.onnx` format)
-6. Select your tokens file (`.txt` format)
-7. Tap "OK"
-
-**Requirements:**
-- The model file must be in `.onnx` format (make sure the model has been converted a described here: [Sherpa ONNX conversion](https://k2-fsa.github.io/sherpa/onnx/tts/piper.html))
-- The tokens file must contain the vocabulary mapping (typically `tokens.txt`)
-
-### Via ADB (Alternative Method)
-You can also install models via ADB:
-1. Create a directory: `modelDir` in `sdcard/Android/data/org.woheller69.ttsengine/files`
-2. Place 3 files there:
-   - `model.onnx` - The converted model file
-   - `tokens.txt` - The vocabulary file
-   - `lang` - A text file with:
-     - Line 1: 3-letter language code (e.g., `eng`)
-     - Line 2: Model name
-
-At next start, the app will migrate it to the new directory structure and add it to installed languages.
-
-Make sure the model has been converted a described here: [Sherpa ONNX conversion](https://k2-fsa.github.io/sherpa/onnx/tts/piper.html)
-
-## Contribute
-For translations use https://toolate.othing.xyz/projects/sherpatts/
-
-# License
-This work is licensed under GPLv3 license, © woheller69
-
-- This app is based on the [Sherpa ONNX Project](https://github.com/k2-fsa/sherpa-onnx), published under Apache-2.0 license
-- It uses data from [eSpeak NG](https://github.com/espeak-ng/espeak-ng), published under GPLv3 license
-- It uses [jsoup](https://github.com/jhy/jsoup), published under MIT license
-- At first start it downloads and installs a Piper or Coqui voice model from Hugging Face. 
-
-# OTHER APPS
-
-| **RadarWeather** | **Gas Prices** | **Smart Eggtimer** |
-|:---:|:---:|:--:|
-| [<img src="https://github.com/woheller69/weather/blob/main/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.weather/) | [<img src="https://github.com/woheller69/spritpreise/blob/main/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.spritpreise/) | [<img src="https://github.com/woheller69/eggtimer/blob/main/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.eggtimer/) |
-| **Bubble** | **hEARtest** | **GPS Cockpit** |
-| [<img src="https://github.com/woheller69/Level/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.level/) | [<img src="https://github.com/woheller69/audiometry/blob/new/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.audiometry/) | [<img src="https://github.com/woheller69/gpscockpit/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.gpscockpit/) |
-| **Audio Analyzer** | **LavSeeker** | **TimeLapseCam** |
-| [<img src="https://github.com/woheller69/audio-analyzer-for-android/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.audio_analyzer_for_android/) |[<img src="https://github.com/woheller69/lavatories/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.lavatories/) | [<img src="https://github.com/woheller69/TimeLapseCamera/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.TimeLapseCam/) |
-| **Arity** | **Cirrus** | **solXpect** |
-| [<img src="https://github.com/woheller69/arity/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.arity/) | [<img src="https://github.com/woheller69/omweather/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.omweather/) | [<img src="https://github.com/woheller69/solXpect/blob/main/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.solxpect/) |
-| **gptAssist** | **dumpSeeker** | **huggingAssist** |
-| [<img src="https://github.com/woheller69/gptassist/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.gptassist/) | [<img src="https://github.com/woheller69/dumpseeker/blob/main/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.dumpseeker/) | [<img src="https://github.com/woheller69/huggingassist/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.hugassist/) |
-| **FREE Browser** | **whoBIRD** | **PeakOrama** |
-| [<img src="https://github.com/woheller69/browser/blob/newmaster/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.browser/) | [<img src="https://github.com/woheller69/whoBIRD/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.whobird/) | [<img src="https://github.com/woheller69/PeakOrama/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.PeakOrama/) |
-| **Whisper** | **Seamless** | **SherpaTTS** |
-| [<img src="https://github.com/woheller69/whisperIME/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.whisper/) | [<img src="https://github.com/woheller69/seamless/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.seemless/) | [<img src="https://github.com/woheller69/ttsengine/blob/master/fastlane/metadata/android/en-US/images/icon.png" width="50">](https://f-droid.org/packages/org.woheller69.ttsengine/) |
+KoSpeaker is licensed under **GPLv3** (inherited from the upstream fork). See [LICENSE](LICENSE) and [NOTICE](NOTICE) for full attribution.

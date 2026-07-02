@@ -1,0 +1,49 @@
+KoSpeaker
+=========
+
+KoSpeaker is an offline, natural-sounding Android system Text-to-Speech engine,
+created to give KOReader on Onyx Boox e-ink devices a neural offline voice for
+Read Aloud of EPUBs.
+
+License
+-------
+KoSpeaker is licensed under the GNU General Public License v3.0 (GPLv3).
+See the LICENSE file for the full text.
+
+Fork lineage
+------------
+KoSpeaker is a fork of:
+
+  woheller69/ttsEngine ("SherpaTTS")
+  https://github.com/woheller69/ttsEngine
+  GPLv3, Copyright (C) woheller69
+
+The GPLv3 license is inherited from this upstream project.
+
+Third-party components
+----------------------
+This software incorporates or depends on the following:
+
+  sherpa-onnx (k2-fsa) — neural TTS runtime
+  https://github.com/k2-fsa/sherpa-onnx
+  Apache License 2.0
+
+  Piper voices — default neural voice models (VITS -> ONNX)
+  https://github.com/rhasspy/piper
+  Apache-2.0 class
+
+  Kokoro-82M — optional high-quality neural voice model (planned)
+  https://huggingface.co/hexgrad/Kokoro-82M
+  Apache-2.0 class
+
+  eSpeak NG — phonemization data
+  https://github.com/espeak-ng/espeak-ng
+  GPLv3
+
+  jsoup — HTML/text handling
+  https://github.com/jhy/jsoup
+  MIT License
+
+Each component remains under its own license. Their inclusion does not alter
+the licensing of the components themselves; the combined work is distributed
+under GPLv3.
