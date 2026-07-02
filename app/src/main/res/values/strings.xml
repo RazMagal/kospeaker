@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name" translatable="false">SherpaTTS</string>
+    <string name="start_main">START</string>
+    <string name="error_download">Download error</string>
+    <string name="dialog_StarOnGitHub">Do you like this app? Please give a star on GitHub or buy the developer a coffee via PayPal.</string>
+    <string name="dialog_Later_button">Maybe later</string>
+    <string name="play">Play</string>
+    <string name="stop">Stop</string>
+    <string name="speed">Speed</string>
+    <string name="speaker_id">Speaker ID:</string>
+    <string name="language_id">Language\u2009</string>
+    <string name="input">Text to generate</string>
+    <string name="download_language">Download language</string>
+    <string name="test_languages">Try models</string>
+    <string name="add_language">Add language</string>
+    <string name="delete_language">Delete language</string>
+    <string name="piper_models">Piper models</string>
+    <string name="coqui_models">Coqui models</string>
+    <string name="apply_system_speed">Apply system settings (speed / pitch) for use as system-wide TTS engine</string>
+    <string name="volume">Volume</string>
+    <string name="one_model_per_language">Only 1 model per language!</string>
+    <string name="strip_ssml">Strip SSML tags (beta)</string>
+    <string name="install_from_sd">Install Piper Model from SD</string>
+    <string name="enter_language_code">3-letter ISO 639-2 code</string>
+    <string name="enter_model_name">Enter model name</string>
+    <string name="select_model_file">Select model.onnx file</string>
+    <string name="select_tokens_file">Select tokens.txt file</string>
+       <string name="cancel">Cancel</string>
+    <string name="language_code_error">Invalid language code. Please enter a 3-letter code.</string>
+    <string name="language_already_installed">Language already installed</string>
+    <string name="error_copying_files">Error copying files</string>
+    <string name="preload_model">Preload model after boot</string>
+</resources>

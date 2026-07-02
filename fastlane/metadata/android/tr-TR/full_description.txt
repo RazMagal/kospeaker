@@ -1,0 +1,4 @@
+SherpaTTS, Piper veya Coqui seslerini kullanan Yeni Nesil Kaldi tabanlı bir Android Yazıdan Ses Üreten motorudur.
+Uygulamayı ilk kez başlattığınızda, Hugging Face'ten tercih ettiğiniz ses modelini indirecektir.
+Lütfen bu durumun internet izni gerektiren tek durum olduğunu unutmayın.
+Model indirildikten sonra, yazıdan ses üretmeye tamamen çevrimdışı çalışır ve mahremiyetinizi ve rahatlığınızı garanti eder.

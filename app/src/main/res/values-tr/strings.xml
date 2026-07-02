@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="error_download">İndirme hatası</string>
+    <string name="dialog_Later_button">Belki daha sonra</string>
+    <string name="play">Oynat</string>
+    <string name="stop">Durdur</string>
+    <string name="speed">Konuşma hızı</string>
+    <string name="speaker_id">Konuşmacı Kimliği:</string>
+    <string name="language_id">Dil </string>
+    <string name="input">Oluşturulacak metin</string>
+    <string name="download_language">Dil İndir</string>
+    <string name="test_languages">Model örneklerine göz atın</string>
+    <string name="add_language">Dil ekle</string>
+    <string name="delete_language">Dili sil</string>
+    <string name="piper_models">Piper modelleri</string>
+    <string name="coqui_models">Coqui modelleri</string>
+    <string name="start_main">BAŞLAT</string>
+    <string name="dialog_StarOnGitHub">Bu uygulamayı beğendiniz mi? Lütfen GitHub\'da bir yıldız verin veya geliştiriciye PayPal aracılığıyla bir kahve ısmarlayın.</string>
+    <string name="apply_system_speed">Sistem genelinde TTS motoru olarak kullanılmak üzere sistem ayarlarını (hız/perde) uygulayın</string>
+    <string name="volume">Ses seviyesi</string>
+    <string name="one_model_per_language">Her dil için sadece 1 model!</string>
+</resources>

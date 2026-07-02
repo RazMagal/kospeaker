@@ -1,0 +1,2 @@
+Add new Piper models
+New option: preload model after device start
