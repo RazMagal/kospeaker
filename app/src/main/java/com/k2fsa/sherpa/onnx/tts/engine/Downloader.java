@@ -20,20 +20,33 @@ import com.k2fsa.sherpa.onnx.tts.engine.databinding.ActivityManageLanguagesBindi
 public class Downloader {
     static final String onnxModel = "model.onnx";
     static final String tokens = "tokens.txt";
+    static final String voices = "voices.bin"; // Kokoro speaker embeddings
     static long onnxModelDownloadSize = 0L;
     static long tokensDownloadSize = 0L;
+    static long voicesDownloadSize = 0L;
     static boolean onnxModelFinished = false;
     static boolean tokensFinished = false;
+    static boolean voicesFinished = false;
     static int onnxModelSize = 0;
     static int tokensSize = 0;
+    static int voicesSize = 0;
 
     public static void downloadModels(final Activity activity, ActivityManageLanguagesBinding binding, String model, String lang, String country, String type) {
         String modelName="";
         if (type.equals("vits-piper")) modelName = model + ".onnx";
         else if (type.equals("vits-coqui")) modelName = "model.onnx";
+        else if (type.startsWith("kokoro")) modelName = "model.onnx";
+
+        // Kokoro models additionally require a voices.bin file. All three files
+        // (model.onnx, voices.bin, tokens.txt) live at the repo root, e.g.
+        // https://huggingface.co/csukuangfj/kokoro-en-v0_19/resolve/main/...
+        final boolean isKokoro = type.startsWith("kokoro");
+        // For non-Kokoro models there is no voices file, so treat it as done.
+        voicesFinished = !isKokoro;
 
         String onnxModelUrl = "https://huggingface.co/csukuangfj/"+ type + "-" + model + "/resolve/main/" + modelName;
         String tokensUrl = "https://huggingface.co/csukuangfj/" + type + "-" + model + "/resolve/main/tokens.txt";
+        String voicesUrl = "https://huggingface.co/csukuangfj/" + type + "-" + model + "/resolve/main/" + voices;
 
         File directory = new File(activity.getExternalFilesDir(null)+ "/" + lang + country + "/");
         if (!directory.exists() && !directory.mkdirs()) {
@@ -75,7 +88,7 @@ public class Downloader {
                         outStream.write(buff, 0, len);
                         if (tempOnnxFile.exists()) onnxModelDownloadSize = tempOnnxFile.length();
                         activity.runOnUiThread(() -> {
-                            binding.downloadSize.setText((tokensDownloadSize + onnxModelDownloadSize)/1024/1024 + " MB / " + (onnxModelSize + tokensSize)/1024/1024 + " MB");
+                            binding.downloadSize.setText((tokensDownloadSize + onnxModelDownloadSize + voicesDownloadSize)/1024/1024 + " MB / " + (onnxModelSize + tokensSize + voicesSize)/1024/1024 + " MB");
                         });
                     }
                     outStream.flush();
@@ -89,7 +102,7 @@ public class Downloader {
                     tempOnnxFile.renameTo(onnxModelFile);
                     onnxModelFinished = true;
                     activity.runOnUiThread(() -> {
-                        if (tokensFinished && onnxModelFinished && binding.buttonStart.getVisibility()==View.GONE){
+                        if (tokensFinished && onnxModelFinished && voicesFinished && binding.buttonStart.getVisibility()==View.GONE){
                             binding.buttonStart.setVisibility(View.VISIBLE);
                             PreferenceHelper preferenceHelper = new PreferenceHelper(activity);
                             preferenceHelper.setCurrentLanguage(lang);
@@ -135,7 +148,7 @@ public class Downloader {
                         outStream.write(buff, 0, len);
                         if (tempTokensFile.exists()) tokensDownloadSize = tempTokensFile.length();
                         activity.runOnUiThread(() -> {
-                            binding.downloadSize.setText((tokensDownloadSize + onnxModelDownloadSize)/1024/1024 + " MB / " + (onnxModelSize + tokensSize)/1024/1024 + " MB");
+                            binding.downloadSize.setText((tokensDownloadSize + onnxModelDownloadSize + voicesDownloadSize)/1024/1024 + " MB / " + (onnxModelSize + tokensSize + voicesSize)/1024/1024 + " MB");
                         });
                     }
                     outStream.flush();
@@ -149,7 +162,7 @@ public class Downloader {
                     tempTokensFile.renameTo(tokensFile);
                     tokensFinished = true;
                     activity.runOnUiThread(() -> {
-                        if (tokensFinished && onnxModelFinished && binding.buttonStart.getVisibility()==View.GONE){
+                        if (tokensFinished && onnxModelFinished && voicesFinished && binding.buttonStart.getVisibility()==View.GONE){
                             binding.buttonStart.setVisibility(View.VISIBLE);
                             PreferenceHelper preferenceHelper = new PreferenceHelper(activity);
                             preferenceHelper.setCurrentLanguage(lang);
@@ -165,6 +178,70 @@ public class Downloader {
                 }
             });
             thread.start();
+        }
+
+        // Kokoro-only: download voices.bin (mirrors the tokens download above).
+        if (isKokoro) {
+            File voicesFileHandle = new File(activity.getExternalFilesDir(null) + "/" + lang + country + "/" + voices);
+            if (voicesFileHandle.exists()) voicesFileHandle.delete();
+            if (!voicesFileHandle.exists()) {
+                voicesFinished = false;
+                Log.d("TTS Engine", "voices file does not exist");
+                Thread thread = new Thread(() -> {
+                    try {
+                        URL url = new URL(voicesUrl);
+                        Log.d("TTS Engine", "Download voices file");
+
+                        URLConnection ucon = url.openConnection();
+                        ucon.setReadTimeout(5000);
+                        ucon.setConnectTimeout(10000);
+                        voicesSize = ucon.getContentLength();
+
+                        InputStream is = ucon.getInputStream();
+                        BufferedInputStream inStream = new BufferedInputStream(is, 1024 * 5);
+
+                        File tempVoicesFile = new File(activity.getExternalFilesDir(null) + "/" + lang + country + "/" + "voices.tmp");
+                        if (tempVoicesFile.exists()) tempVoicesFile.delete();
+
+                        FileOutputStream outStream = new FileOutputStream(tempVoicesFile);
+                        byte[] buff = new byte[5 * 1024];
+
+                        int len;
+                        while ((len = inStream.read(buff)) != -1) {
+                            outStream.write(buff, 0, len);
+                            if (tempVoicesFile.exists()) voicesDownloadSize = tempVoicesFile.length();
+                            activity.runOnUiThread(() -> {
+                                binding.downloadSize.setText((tokensDownloadSize + onnxModelDownloadSize + voicesDownloadSize)/1024/1024 + " MB / " + (onnxModelSize + tokensSize + voicesSize)/1024/1024 + " MB");
+                            });
+                        }
+                        outStream.flush();
+                        outStream.close();
+                        inStream.close();
+
+                        if (!tempVoicesFile.exists()) {
+                            throw new IOException();
+                        }
+
+                        tempVoicesFile.renameTo(voicesFileHandle);
+                        voicesFinished = true;
+                        activity.runOnUiThread(() -> {
+                            if (tokensFinished && onnxModelFinished && voicesFinished && binding.buttonStart.getVisibility()==View.GONE){
+                                binding.buttonStart.setVisibility(View.VISIBLE);
+                                PreferenceHelper preferenceHelper = new PreferenceHelper(activity);
+                                preferenceHelper.setCurrentLanguage(lang);
+                                LangDB langDB = LangDB.getInstance(activity);
+                                langDB.addLanguage(model, lang, country, 0, 1.0f, 1.0f, type);
+                            }
+                        });
+
+                    } catch (IOException i) {
+                        activity.runOnUiThread(() -> Toast.makeText(activity, activity.getResources().getString(R.string.error_download), Toast.LENGTH_SHORT).show());
+                        voicesFileHandle.delete();
+                        Log.w("TTS Engine", activity.getResources().getString(R.string.error_download), i);
+                    }
+                });
+                thread.start();
+            }
         }
     }
 }

@@ -206,4 +206,16 @@
         <item>sv-cv</item>
         <item>uk-mai</item>
     </string-array>
+
+    <!--
+      Kokoro-82M models (optional, high quality). Piper stays the default.
+      Each item MUST equal the Hugging Face repo suffix so Downloader builds
+      the URL "csukuangfj/kokoro-<item>". The first two characters are the
+      2-letter language code used to derive the ISO-639-3 folder name.
+      kokoro-en-v0_19 ships model.onnx + voices.bin + tokens.txt and uses the
+      bundled espeak-ng-data as dataDir (no extra lexicon/dict downloads).
+    -->
+    <string-array name="kokoro_models">
+        <item>en-v0_19</item>
+    </string-array>
 </resources>

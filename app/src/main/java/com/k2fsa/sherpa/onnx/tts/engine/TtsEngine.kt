@@ -34,6 +34,11 @@ object TtsEngine {
     private var dataDir: String = "espeak-ng-data"
     private var dictDir: String? = null
 
+    // Architecture of the currently selected model (from LangDB COLUMN_TYPE).
+    // Defaults to VITS/Piper when null/blank for backward compatibility with
+    // existing installs and Migrate.java (which store "vits-piper").
+    private var modelType: String? = null
+
     @JvmStatic
     fun getAvailableLanguages(context: Context): ArrayList<String> {
         val langCodes = java.util.ArrayList<String>()
@@ -72,6 +77,7 @@ object TtsEngine {
         this.speed.value = currentLanguage.speed
         this.speakerId.value = currentLanguage.sid
         this.volume.value = currentLanguage.volume
+        this.modelType = currentLanguage.type
         PreferenceHelper(context).setCurrentLanguage(language)
     }
 
@@ -100,6 +106,14 @@ object TtsEngine {
             dictDir = "$newDir/$dictDir"
             ruleFsts = "$modelDir/phone.fst,$modelDir/date.fst,$modelDir/number.fst"
         }
+
+        // Branch by model architecture. getOfflineTtsConfig() (sherpa-onnx
+        // v1.13.0) auto-populates the Kokoro sub-config when `voices` is
+        // non-empty, otherwise it builds the VITS/Piper sub-config. Kokoro
+        // ships a voices.bin and reuses the bundled espeak-ng-data as dataDir
+        // (already set above). Reset to null for every other type so switching
+        // back to Piper does not leak the Kokoro voices path.
+        voices = if (modelType?.startsWith("kokoro") == true) "voices.bin" else null
 
         val config = getOfflineTtsConfig(
             modelDir = modelDir!!,

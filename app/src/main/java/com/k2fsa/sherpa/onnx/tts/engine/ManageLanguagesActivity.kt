@@ -36,6 +36,7 @@ class ManageLanguagesActivity  : AppCompatActivity() {
         ThemeUtil.setStatusBarAppearance(this)
         val allPiperModels: Array<String> = resources.getStringArray(R.array.piper_models)
         val allCoquiModels: Array<String> = resources.getStringArray(R.array.coqui_models)
+        val allKokoroModels: Array<String> = resources.getStringArray(R.array.kokoro_models)
 
         val db = LangDB.getInstance(this)
         val installedLanguages = db.allInstalledLanguages
@@ -55,8 +56,17 @@ class ManageLanguagesActivity  : AppCompatActivity() {
             if (!installedLangCodes.contains(lang)) showCoquiModels.add(model)
         }
 
+        // Kokoro items are of the form "<2-letter-lang>-<version>" (e.g. "en-v0_19").
+        val showKokoroModels = mutableListOf<String>()
+        for(model in allKokoroModels){
+            val twoLetterCode: String = model.split("-").get(0)
+            val lang = Locale(twoLetterCode).isO3Language
+            if (!installedLangCodes.contains(lang)) showKokoroModels.add(model)
+        }
+
         val piperAdapter = ArrayAdapter(this, R.layout.list_item, R.id.text_view, showPiperModels)
         val coquiAdapter = ArrayAdapter(this, R.layout.list_item, R.id.text_view, showCoquiModels)
+        val kokoroAdapter = ArrayAdapter(this, R.layout.list_item, R.id.text_view, showKokoroModels)
 
         binding!!.piperModelList.adapter = piperAdapter
         binding!!.piperModelList.setOnItemClickListener { parent, view, position, id ->
@@ -86,6 +96,24 @@ class ManageLanguagesActivity  : AppCompatActivity() {
             binding!!.buttonTestVoices.visibility = View.GONE
             binding!!.piperHeader.visibility = View.GONE
             binding!!.coquiHeader.visibility = View.GONE
+            binding!!.downloadSize.setText("")
+            Downloader.downloadModels(this, binding, model, lang, country, type)
+        }
+
+        binding!!.kokoroModelList.adapter = kokoroAdapter
+        binding!!.kokoroModelList.setOnItemClickListener { parent, view, position, id ->
+            val model = showKokoroModels.get(position)
+            val twoLetterCode = model.split("-").get(0)
+            val country = ""
+            val lang = Locale(twoLetterCode).isO3Language
+            val type = "kokoro"
+            binding!!.piperModelList.visibility = View.GONE
+            binding!!.coquiModelList.visibility = View.GONE
+            binding!!.kokoroModelList.visibility = View.GONE
+            binding!!.buttonTestVoices.visibility = View.GONE
+            binding!!.piperHeader.visibility = View.GONE
+            binding!!.coquiHeader.visibility = View.GONE
+            binding!!.kokoroHeader.visibility = View.GONE
             binding!!.downloadSize.setText("")
             Downloader.downloadModels(this, binding, model, lang, country, type)
         }
