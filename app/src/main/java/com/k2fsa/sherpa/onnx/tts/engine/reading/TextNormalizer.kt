@@ -21,6 +21,16 @@ package com.k2fsa.sherpa.onnx.tts.engine.reading
  * @property stripBrackets          Drop bracketed numeric citations such as `[12]`.
  * @property stripSuperscriptDigits Drop Unicode superscript digits used as
  *                                  footnote markers (e.g. `word²`).
+ * @property stripHebrewNiqqud      Remove Hebrew niqqud (vowel points) and
+ *                                  cantillation marks. Off by default because
+ *                                  some Hebrew voices read pointed text better.
+ * @property autoDetectScript       When [script] is `null`, detect the dominant
+ *                                  script of the input and adapt the pipeline;
+ *                                  when `false` (and [script] is `null`) the
+ *                                  text is treated as [TextScript.LATIN].
+ * @property script                 Force a specific [TextScript] instead of
+ *                                  auto-detecting; `null` means "decide from the
+ *                                  text" (see [autoDetectScript]).
  */
 data class NormalizerOptions(
     val collapseWhitespace: Boolean = true,
@@ -31,6 +41,9 @@ data class NormalizerOptions(
     val expandAbbreviations: Boolean = true,
     val stripBrackets: Boolean = true,
     val stripSuperscriptDigits: Boolean = true,
+    val stripHebrewNiqqud: Boolean = false,
+    val autoDetectScript: Boolean = true,
+    val script: TextScript? = null,
 )
 
 /**
@@ -71,6 +84,13 @@ object TextNormalizer {
     private val SPACE_BEFORE_PUNCT = Regex(" +([,.;:!?])")
 
     /**
+     * Hebrew niqqud (vowel points) and cantillation (te'amim) marks:
+     * `U+0591`‥`U+05BD`, `U+05BF`, and `U+05C1`‥`U+05C7`. Deliberately skips
+     * `U+05BE` (maqaf) and `U+05C0` (paseq), which are punctuation, not marks.
+     */
+    private val HEBREW_NIQQUD = Regex("[\\u0591-\\u05BD\\u05BF\\u05C1-\\u05C7]")
+
+    /**
      * Ordered abbreviation-expansion rules. Order matters only where one pattern
      * could shadow another; the entries here are mutually exclusive by design.
      *
@@ -107,16 +127,47 @@ object TextNormalizer {
     fun normalize(text: String, options: NormalizerOptions = NormalizerOptions()): String {
         var s = text
 
+        // Decide which script we are dealing with, then gate the language-specific
+        // steps. English-only clean-ups (abbreviation expansion, superscript and
+        // bracket footnote markers) are skipped for dominant-Hebrew text; the
+        // Hebrew-only clean-ups run whenever Hebrew is present (HEBREW or MIXED).
+        // For LATIN the pipeline is byte-for-byte identical to before.
+        val script = options.script
+            ?: if (options.autoDetectScript) detectScript(s) else TextScript.LATIN
+        val hebrewAware = script == TextScript.HEBREW || script == TextScript.MIXED
+        val englishAware = script != TextScript.HEBREW
+
         if (options.stripInvisibleChars) s = INVISIBLE_CHARS.replace(s, "")
+        if (hebrewAware) s = normalizeHebrew(s, options.stripHebrewNiqqud)
         if (options.normalizeQuotes) s = normalizeQuotes(s)
         if (options.normalizeEllipsis) s = s.replace("…", "...")
-        if (options.stripSuperscriptDigits) s = SUPERSCRIPT_DIGITS.replace(s, "")
-        if (options.stripBrackets) s = BRACKET_CITATION.replace(s, "")
-        if (options.expandAbbreviations) s = expandAbbreviations(s)
+        if (options.stripSuperscriptDigits && englishAware) s = SUPERSCRIPT_DIGITS.replace(s, "")
+        if (options.stripBrackets && englishAware) s = BRACKET_CITATION.replace(s, "")
+        if (options.expandAbbreviations && englishAware) s = expandAbbreviations(s)
         if (options.dashesToPauses) s = SPACED_DASH.replace(s, ", ")
         if (options.collapseWhitespace) s = collapseWhitespace(s)
 
         return s
+    }
+
+    /**
+     * Normalizes Hebrew-specific punctuation so a TTS engine reads it naturally:
+     *  - geresh `U+05F3` ׳ → ASCII apostrophe `'` (used for foreign sounds, e.g. ג׳);
+     *  - gershayim `U+05F4` ״ → ASCII quote `"` (marks acronyms, e.g. צה״ל);
+     *  - maqaf `U+05BE` ־ → a space (the Hebrew hyphen joins words; a space lets
+     *    the parts be read separately and is tidied by [collapseWhitespace]).
+     *
+     * When [stripNiqqud] is true the vowel/cantillation marks in [HEBREW_NIQQUD]
+     * are removed first; the punctuation above sits outside that range and is
+     * always converted regardless of the flag.
+     */
+    private fun normalizeHebrew(text: String, stripNiqqud: Boolean): String {
+        var s = text
+        if (stripNiqqud) s = HEBREW_NIQQUD.replace(s, "")
+        return s
+            .replace('׳', '\'') // ׳ geresh   -> '
+            .replace('״', '"')  // ״ gershayim -> "
+            .replace('־', ' ')  // ־ maqaf     -> space
     }
 
     /** Replaces curly single/double quotes (and their low-9 variants) with ASCII quotes. */

@@ -61,10 +61,19 @@ object SentenceChunker {
         if (trimmed.isEmpty()) return emptyList()
 
         val cap = maxChars.coerceAtLeast(1)
-        val sentences = splitIntoSentences(trimmed)
+        // Hebrew (and mixed Hebrew/Latin) text has no letter case, so a new
+        // sentence starts with an ordinary letter, not a capital. Detect that up
+        // front and relax the boundary rule accordingly; pure Latin keeps the
+        // strict uppercase heuristic so English chunking is unchanged.
+        val caseless = isCaselessScript(detectScript(trimmed))
+        val sentences = splitIntoSentences(trimmed, caseless)
         val bounded = sentences.flatMap { splitLongSentence(it, cap) }
         return mergeShortFragments(bounded, cap)
     }
+
+    /** Scripts whose sentences do not begin with an upper-case letter. */
+    private fun isCaselessScript(script: TextScript): Boolean =
+        script == TextScript.HEBREW || script == TextScript.MIXED
 
     /**
      * Scans [text] once and cuts it at genuine sentence boundaries: a run of
@@ -72,7 +81,7 @@ object SentenceChunker {
      * capital letter, digit or opening quote. A lone `.` preceded by an
      * abbreviation or a single letter is skipped so it does not split.
      */
-    private fun splitIntoSentences(text: String): List<String> {
+    private fun splitIntoSentences(text: String, caseless: Boolean): List<String> {
         val sentences = mutableListOf<String>()
         val n = text.length
         var start = 0
@@ -97,7 +106,7 @@ object SentenceChunker {
             val nextStart = if (after < n && text[after].isWhitespace())
                 text.indexOfFirst(after) { !it.isWhitespace() } else -1
             val isRealBoundary = nextStart != -1 &&
-                isSentenceStart(text[nextStart]) &&
+                isSentenceStart(text[nextStart], caseless) &&
                 // Only a single '.' can be a false positive (abbreviation / initial).
                 !(i == runEnd && text[i] == '.' && isNonBreakingPeriod(text, i))
 
@@ -117,9 +126,15 @@ object SentenceChunker {
         return sentences
     }
 
-    /** True for characters that can legitimately begin a new sentence. */
-    private fun isSentenceStart(c: Char): Boolean =
-        c.isUpperCase() || c.isDigit() || c in "\"'(«¿¡"
+    /**
+     * True for characters that can legitimately begin a new sentence. A leading
+     * quote/paren or a digit qualifies in any script, as does an upper-case
+     * letter. For [caseless] scripts (Hebrew) there is no case, so a Hebrew
+     * letter after the terminator also opens a new sentence — this is the fix
+     * that lets Hebrew split at `. ` where the old uppercase-only rule never did.
+     */
+    private fun isSentenceStart(c: Char, caseless: Boolean): Boolean =
+        c in "\"'(«¿¡" || c.isDigit() || c.isUpperCase() || (caseless && isHebrew(c.code))
 
     /**
      * Decides whether the period at [dotIndex] belongs to an abbreviation or an

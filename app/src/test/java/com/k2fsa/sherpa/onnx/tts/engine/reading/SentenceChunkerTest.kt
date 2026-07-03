@@ -113,4 +113,37 @@ class SentenceChunkerTest {
             SentenceChunker.chunk("  Hello there friend.  "),
         )
     }
+
+    // --- Hebrew: no-uppercase boundary fix ------------------------------------
+
+    @Test
+    fun splitsHebrewOnSentenceBoundaries() {
+        // Two Hebrew sentences: "The little boy walked to school in the morning.
+        // He met his good friends on the way home?" — each long enough that the
+        // short-fragment merger keeps them apart, proving the boundary fired.
+        val chunks = SentenceChunker.chunk(
+            "הילד הקטן הלך אל בית הספר בבוקר. הוא פגש את חבריו הטובים בדרך הביתה?",
+        )
+        assertEquals(2, chunks.size)
+        assertTrue(chunks[0].endsWith("."))
+        assertTrue(chunks[1].endsWith("?"))
+        assertTrue(chunks[1].startsWith("הוא"))
+    }
+
+    @Test
+    fun splitsLongHebrewSentenceOnCommas() {
+        val long = "אני אוהב תפוחים, בננות, תפוזים, ענבים, אגסים, אבטיחים, ותותים בקיץ החם"
+        val chunks = SentenceChunker.chunk(long, maxChars = 40)
+
+        assertTrue("expected multiple chunks", chunks.size > 1)
+        assertTrue("every chunk must respect maxChars", chunks.all { it.length <= 40 })
+        assertTrue("no blank chunks", chunks.none { it.isBlank() })
+        assertTrue(chunks.joinToString(" ").contains("תפוזים"))
+    }
+
+    @Test
+    fun singleHebrewSentenceIsNotOverSplit() {
+        val chunks = SentenceChunker.chunk("שלום עולם מה שלומך היום")
+        assertEquals(1, chunks.size)
+    }
 }

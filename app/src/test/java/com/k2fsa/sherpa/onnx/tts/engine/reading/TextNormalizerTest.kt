@@ -158,4 +158,69 @@ class TextNormalizerTest {
             TextNormalizer.normalize("the fox — according to Dr. Smith [3] — jumps…"),
         )
     }
+
+    // --- Hebrew: script-aware normalization -----------------------------------
+
+    @Test
+    fun hebrewGereshBecomesApostrophe() {
+        // ג׳ורג׳  (George) -> ג'ורג'
+        assertEquals("ג'ורג'", TextNormalizer.normalize("ג׳ורג׳"))
+    }
+
+    @Test
+    fun hebrewGershayimBecomesQuote() {
+        // צה״ל  (IDF acronym) -> צה"ל
+        assertEquals("צה\"ל", TextNormalizer.normalize("צה״ל"))
+    }
+
+    @Test
+    fun hebrewMaqafBecomesSpace() {
+        // בית־ספר  (school) -> בית ספר
+        assertEquals("בית ספר", TextNormalizer.normalize("בית־ספר"))
+    }
+
+    @Test
+    fun stripsHebrewNiqqudWhenEnabled() {
+        // shin + qamats(U+05B8) + lamed + vav + final-mem  ->  shin lamed vav final-mem
+        val pointed = "שָלום"
+        assertEquals(
+            "שלום",
+            TextNormalizer.normalize(pointed, NormalizerOptions(stripHebrewNiqqud = true)),
+        )
+    }
+
+    @Test
+    fun keepsHebrewNiqqudByDefault() {
+        val pointed = "שָלום"
+        assertEquals(pointed, TextNormalizer.normalize(pointed))
+    }
+
+    @Test
+    fun doesNotExpandEnglishAbbreviationsInAutoDetectedHebrew() {
+        val out = TextNormalizer.normalize("המורה Mr. כהן הגיע אל הבית הגדול")
+        assertTrue("English abbreviation preserved in Hebrew", out.contains("Mr."))
+        assertFalse("must not expand Mr. in Hebrew", out.contains("Mister"))
+    }
+
+    @Test
+    fun doesNotExpandEnglishAbbreviationsWhenScriptForcedHebrew() {
+        val out = TextNormalizer.normalize(
+            "Mr. שלום עולם היום",
+            NormalizerOptions(script = TextScript.HEBREW),
+        )
+        assertTrue(out.contains("Mr."))
+        assertFalse(out.contains("Mister"))
+    }
+
+    @Test
+    fun universalCleanupStillAppliesToHebrew() {
+        // Soft hyphen inside a word + collapsed run of spaces.
+        assertEquals("שלום עולם", TextNormalizer.normalize("של­ום   עולם"))
+    }
+
+    @Test
+    fun smartQuotesAndEllipsisNormalizedInHebrew() {
+        assertEquals("\"שלום\"", TextNormalizer.normalize("“שלום”"))
+        assertEquals("שלום...", TextNormalizer.normalize("שלום…"))
+    }
 }
