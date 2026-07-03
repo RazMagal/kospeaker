@@ -73,6 +73,10 @@
             android:screenOrientation="portrait"
             android:exported="true">
         </activity>
+        <activity
+            android:name=".SetupActivity"
+            android:theme="@style/Theme.SherpaOnnxTtsEngine"
+            android:exported="false" />
         <receiver
             android:name=".BootCompleteReceiver"
             android:enabled="true"

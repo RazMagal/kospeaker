@@ -34,4 +34,23 @@
     <string name="language_already_installed">Language already installed</string>
     <string name="error_copying_files">Error copying files</string>
     <string name="preload_model">Preload model after boot</string>
+
+    <!-- Setup / How to use with KOReader screen -->
+    <string name="setup_title">Set up with KOReader</string>
+    <string name="setup_back">Back</string>
+    <string name="setup_section_default">1. Make KoSpeaker your voice</string>
+    <string name="setup_tts_settings_hint">Open Android\'s text-to-speech settings, choose KoSpeaker as the default engine, then set your preferred speed and pitch.</string>
+    <string name="setup_open_tts_settings">Open Android text-to-speech settings</string>
+    <string name="setup_status_default">✓ KoSpeaker is your default voice</string>
+    <string name="setup_status_not_default">Not default yet — tap above</string>
+    <string name="setup_section_koreader">2. Set up KOReader</string>
+    <string name="setup_step_1">Install the audiobook.koplugin plugin into your koreader/plugins/ folder:</string>
+    <string name="setup_plugin_url" translatable="false">https://github.com/stradichenko/audiobook.koplugin</string>
+    <string name="setup_keep_plugin_note">Keep this plugin installed. KoSpeaker is the voice it uses, not a replacement for it — do not remove it.</string>
+    <string name="setup_step_2">Open an EPUB, then tap the menu and choose Read Aloud.</string>
+    <string name="setup_step_3">E-ink tip: disable page-turn animation for smoother, less flickery reading.</string>
+    <string name="setup_test_voice">Test voice</string>
+    <string name="setup_test_sample">Hello. This is KoSpeaker reading aloud.</string>
+    <string name="setup_voice_not_ready">Voice engine is not ready yet. Please wait a moment and try again.</string>
+    <string name="setup_settings_unavailable">Could not open that screen on this device.</string>
 </resources>

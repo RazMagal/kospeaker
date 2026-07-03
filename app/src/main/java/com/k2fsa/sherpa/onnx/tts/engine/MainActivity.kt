@@ -179,6 +179,25 @@ class MainActivity : ComponentActivity() {
                                 .fillMaxSize()
                                 .padding(16.dp)
                         ) {
+                            // Entry point to the guided "Set up with KOReader" screen.
+                            item {
+                                Button(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 12.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = colorResource(R.color.primaryDark),
+                                        contentColor = colorResource(R.color.white)
+                                    ),
+                                    onClick = {
+                                        startActivity(
+                                            Intent(applicationContext, SetupActivity::class.java)
+                                        )
+                                    }
+                                ) {
+                                    Text(getString(R.string.setup_title))
+                                }
+                            }
                             item {
                                 Text(
                                     getString(R.string.speed) + " " + String.format(
