@@ -78,8 +78,11 @@ dependencies {
     implementation("com.google.android.material:material:1.9.0")
     implementation("com.github.k2-fsa:sherpa-onnx:v1.13.0")
     // onnxruntime-android drives the phonikud premium Hebrew models (diacritizer + Piper VITS).
-    // 1.20.0 is a widely-available stable release. See packaging{} pickFirsts for the shared .so.
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
+    // Version MUST match the ONNX Runtime that sherpa-onnx v1.13.0 bundles (1.24.3): both AARs
+    // ship libonnxruntime.so, packaging{} pickFirsts keeps one, and ONNX Runtime uses versioned
+    // symbols (OrtGetApiBase@@VERS_1.24.3). If the versions differ, one JNI wrapper can't resolve
+    // its symbol at runtime -> UnsatisfiedLinkError. Keep this in lockstep with sherpa-onnx.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.24.3")
     implementation("androidx.preference:preference:1.2.1")
     implementation("com.github.woheller69:FreeDroidWarn:+")
     implementation("org.jsoup:jsoup:1.22.1")
