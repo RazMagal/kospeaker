@@ -8,6 +8,10 @@ import android.speech.tts.TextToSpeech
 fun getSampleText(lang: String): String {
     var text = ""
     when (lang) {
+        "heb" -> {
+            text = "שלום, זהו מנוע הקראה בעברית המבוסס על פוניקוד. מה שלומך היום?"
+        }
+
         "ara" -> {
             text = "هذا هو محرك تحويل النص إلى كلام باستخدام الجيل القادم من كالدي"
         }

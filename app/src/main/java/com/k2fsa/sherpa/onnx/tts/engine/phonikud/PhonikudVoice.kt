@@ -41,6 +41,7 @@ class PhonikudVoice(modelDir: String) : AutoCloseable {
     fun synthesize(diacritizedHebrew: String): FloatArray {
         val phonemes = HebrewPhonemizer.phonemize(diacritizedHebrew)
         val ids = PiperTokenizer.phonemesToIds(phonemes)
+        android.util.Log.i("KoSpeakerPhonikud", "phonemes='${phonemes.take(80)}' ids=${ids.size}")
         if (ids.isEmpty()) return FloatArray(0)
 
         // input: int64[1, T]; input_lengths: int64[1] = {T}; scales: float32[3]

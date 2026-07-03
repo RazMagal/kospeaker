@@ -21,7 +21,12 @@ class PhonikudEngine private constructor(
     /** Hebrew (optionally bare) -> PCM float @ 22050 Hz. */
     fun synthesize(hebrew: String): FloatArray {
         val diacritized = diacritizer.diacritize(hebrew)
-        return voice.synthesize(diacritized)
+        val audio = voice.synthesize(diacritized)
+        android.util.Log.i(
+            "KoSpeakerPhonikud",
+            "in='${hebrew.take(40)}' niqqud='${diacritized.take(60)}' samples=${audio.size}",
+        )
+        return audio
     }
 
     override fun close() {
