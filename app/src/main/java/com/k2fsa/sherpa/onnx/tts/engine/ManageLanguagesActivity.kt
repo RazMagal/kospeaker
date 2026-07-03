@@ -167,16 +167,6 @@ class ManageLanguagesActivity  : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            if (modelFileUri == null) {
-                Toast.makeText(this, getString(R.string.select_model_file), Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            if (tokensFileUri == null) {
-                Toast.makeText(this, getString(R.string.select_tokens_file), Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
             // Check duplicates
             val db = LangDB.getInstance(this)
             if (db.allInstalledLanguages.any { it.lang == langCode }) {
@@ -188,10 +178,27 @@ class ManageLanguagesActivity  : AppCompatActivity() {
             // MMS models (facebook/mms-tts-*) must be stored as "vits-mms" so
             // TtsEngine loads them with the character frontend (empty dataDir
             // and lexicon) instead of the espeak frontend used for Piper.
-            val type = if (modelTypeGroup.checkedRadioButtonId == R.id.radioModelTypeMms) {
-                "vits-mms"
-            } else {
-                "vits-piper"
+            // Phonikud (premium Hebrew) uses three large ONNX files pushed via
+            // ADB/file-manager, so it registers the entry without the file pickers.
+            val type = when (modelTypeGroup.checkedRadioButtonId) {
+                R.id.radioModelTypeMms -> "vits-mms"
+                R.id.radioModelTypePhonikud -> "phonikud"
+                else -> "vits-piper"
+            }
+
+            if (type == "phonikud") {
+                installPhonikudModel(langCode)
+                return@setOnClickListener
+            }
+
+            if (modelFileUri == null) {
+                Toast.makeText(this, getString(R.string.select_model_file), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (tokensFileUri == null) {
+                Toast.makeText(this, getString(R.string.select_tokens_file), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
 
             // Proceed with install
@@ -205,6 +212,39 @@ class ManageLanguagesActivity  : AppCompatActivity() {
             .create()
 
         dialog.show()
+    }
+
+    /**
+     * Register a premium Hebrew (phonikud) model. The three ONNX files are far too large
+     * (~308MB + ~64MB) to copy through the SAF file pickers, so this only creates the model
+     * folder and DB row; the user pushes phonikud.onnx, tokenizer.json and shaul.onnx into the
+     * folder via ADB or a file manager. See docs/HEBREW.md.
+     */
+    private fun installPhonikudModel(langCode: String) {
+        val directory = File(this.getExternalFilesDir(null), "/$langCode/")
+        if (!directory.exists() && !directory.mkdirs()) {
+            Toast.makeText(this, R.string.error_copying_files, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val db = LangDB.getInstance(this)
+        db.addLanguage(modelName, langCode, "", 0, 1.0f, 1.0f, "phonikud")
+
+        Toast.makeText(
+            this,
+            getString(R.string.phonikud_push_files, langCode, directory.absolutePath),
+            Toast.LENGTH_LONG,
+        ).show()
+
+        val preferenceHelper = PreferenceHelper(this)
+        preferenceHelper.setCurrentLanguage(langCode)
+        modelFileUri = null
+        tokensFileUri = null
+        langCodeForInstallation = ""
+        val intent = Intent(this, MainActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+        finishAffinity()
     }
 
     private fun installCustomModel(langCode: String, modelUri: Uri, tokensUri: Uri, type: String) {

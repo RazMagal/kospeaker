@@ -51,6 +51,13 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        // Both sherpa-onnx AND onnxruntime-android bundle libonnxruntime.so, which would
+        // otherwise fail the build with a duplicate-native-library error. Keep the first one.
+        // NOTE: pickFirst can leave the ORT Java API (from onnxruntime-android) and the actually
+        // packaged .so at different versions -> a device-verification risk for the phonikud path.
+        jniLibs {
+            pickFirsts += "**/libonnxruntime.so"
+        }
     }
     lint {
         disable += "MissingTranslation"
@@ -70,6 +77,9 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.9.0")
     implementation("com.github.k2-fsa:sherpa-onnx:v1.13.0")
+    // onnxruntime-android drives the phonikud premium Hebrew models (diacritizer + Piper VITS).
+    // 1.20.0 is a widely-available stable release. See packaging{} pickFirsts for the shared .so.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
     implementation("androidx.preference:preference:1.2.1")
     implementation("com.github.woheller69:FreeDroidWarn:+")
     implementation("org.jsoup:jsoup:1.22.1")

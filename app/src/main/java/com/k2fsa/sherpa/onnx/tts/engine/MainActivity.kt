@@ -3,6 +3,7 @@
 package com.k2fsa.sherpa.onnx.tts.engine
 
 import android.content.Intent
+import com.k2fsa.sherpa.onnx.tts.engine.reading.SentenceChunker
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
@@ -172,7 +173,8 @@ class MainActivity : ComponentActivity() {
                         val numLanguages = langDB.allInstalledLanguages.size
                         val allLanguages = langDB.allInstalledLanguages
                         var currentLanguage = allLanguages.indexOfFirst { it.lang == preferenceHelper.getCurrentLanguage()!! }
-                        val numSpeakers = TtsEngine.tts!!.numSpeakers()
+                        // Phonikud (premium Hebrew) keeps TtsEngine.tts null and is single-speaker.
+                        val numSpeakers = TtsEngine.tts?.numSpeakers() ?: 1
 
                         LazyColumn( // ✅ LazyColumn replaces Column
                             modifier = Modifier
@@ -558,12 +560,23 @@ class MainActivity : ComponentActivity() {
                                                 if (preferenceHelper.getStripSSML()) sampleText = TtsEngine.stripSsmlTags(sampleText)
 
                                                 CoroutineScope(Dispatchers.Default).launch {
-                                                    TtsEngine.tts!!.generateWithCallback(
-                                                        text = sampleText,
-                                                        sid = TtsEngine.speakerId.value,
-                                                        speed = TtsEngine.speed.value,
-                                                        callback = ::callback,
-                                                    )
+                                                    val phonikud = TtsEngine.phonikud
+                                                    if (phonikud != null) {
+                                                        // Premium Hebrew: chunk + synthesize via ONNX,
+                                                        // reusing the same ::callback -> AudioTrack path.
+                                                        for (chunk in SentenceChunker.chunk(sampleText)) {
+                                                            if (stopped) break
+                                                            val samples = phonikud.synthesize(chunk)
+                                                            if (samples.isNotEmpty()) callback(samples)
+                                                        }
+                                                    } else {
+                                                        TtsEngine.tts!!.generateWithCallback(
+                                                            text = sampleText,
+                                                            sid = TtsEngine.speakerId.value,
+                                                            speed = TtsEngine.speed.value,
+                                                            callback = ::callback,
+                                                        )
+                                                    }
                                                 }.start()
                                             }
                                         }) {
@@ -651,7 +664,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun initAudioTrack() {
-        val sampleRate = TtsEngine.tts!!.sampleRate()
+        // Phonikud keeps TtsEngine.tts null; fall back to its 22050 Hz sample rate.
+        val sampleRate = TtsEngine.tts?.sampleRate() ?: (TtsEngine.phonikud?.sampleRate ?: 22050)
         val bufLength = AudioTrack.getMinBufferSize(
             sampleRate,
             AudioFormat.CHANNEL_OUT_MONO,

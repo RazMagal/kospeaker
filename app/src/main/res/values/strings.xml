@@ -25,6 +25,8 @@
     <string name="model_type_label">Model type</string>
     <string name="model_type_piper">Piper / VITS (espeak)</string>
     <string name="model_type_mms">MMS (facebook/mms-tts-*)</string>
+    <string name="model_type_phonikud">Phonikud (Hebrew, premium)</string>
+    <string name="phonikud_push_files">Registered \"%1$s\". Now push phonikud.onnx, tokenizer.json and shaul.onnx into:\n%2$s</string>
     <string name="enter_language_code">3-letter ISO 639-2 code</string>
     <string name="enter_model_name">Enter model name</string>
     <string name="select_model_file">Select model.onnx file</string>

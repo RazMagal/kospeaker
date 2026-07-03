@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.getOfflineTtsConfig
+import com.k2fsa.sherpa.onnx.tts.engine.phonikud.PhonikudEngine
 import org.jsoup.Jsoup
 import java.io.File
 import java.io.FileOutputStream
@@ -15,6 +16,11 @@ import java.io.IOException
 object TtsEngine {
     private val ttsCache = mutableMapOf<String, OfflineTts>()
     var tts: OfflineTts? = null
+
+    // Premium offline Hebrew (phonikud). Non-null only while a "phonikud"-type model is loaded;
+    // in that mode [tts] is null and TtsService routes synthesis through this engine instead.
+    // ON-DEVICE UNVERIFIED (ONNX/audio path); see the phonikud subpackage.
+    var phonikud: PhonikudEngine? = null
 
     // https://en.wikipedia.org/wiki/ISO_639-3
     var lang: String? = ""
@@ -56,9 +62,16 @@ object TtsEngine {
 
     @JvmStatic
     fun createTts(context: Context, language: String) {
+        // A phonikud engine keeps [tts] null, so guard it explicitly to avoid reloading the
+        // large ONNX models on every synthesis request.
+        if (phonikud != null && lang == language) {
+            Log.i(TAG, "Phonikud already loaded: $language")
+            return
+        }
         if (tts == null || lang != language) {
             if (ttsCache.containsKey(language)) {
                 Log.i(TAG, "From TTS cache: " + language)
+                clearPhonikud() // switched away from a phonikud model to a cached sherpa one
                 tts = ttsCache[language]
                 loadLanguageSettings(context, language)
             } else {
@@ -67,6 +80,11 @@ object TtsEngine {
         } else {
             Log.i(TAG, "Already loaded: " + language)
         }
+    }
+
+    private fun clearPhonikud() {
+        phonikud?.close()
+        phonikud = null
     }
 
     private fun loadLanguageSettings(context: Context, language: String) {
@@ -95,6 +113,25 @@ object TtsEngine {
         val externalFilesDir = context.getExternalFilesDir(null)!!.absolutePath
 
         val modelDir = "$externalFilesDir/$lang$country"
+
+        // Premium offline Hebrew (phonikud): run two onnxruntime-android models instead of the
+        // sherpa OfflineTts. Model dir must hold phonikud.onnx, tokenizer.json and shaul.onnx.
+        // ON-DEVICE UNVERIFIED. On failure we leave both engines null so TtsService errors
+        // gracefully rather than crashing.
+        if (modelType?.startsWith("phonikud") == true) {
+            clearPhonikud()
+            tts = null
+            phonikud = try {
+                PhonikudEngine.create(modelDir)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load phonikud engine from $modelDir", e)
+                null
+            }
+            Log.i(TAG, "Phonikud engine loaded=${phonikud != null} for $lang")
+            return
+        }
+        // Any non-phonikud model: make sure a previously loaded phonikud engine is released.
+        clearPhonikud()
 
         // Reset the per-architecture frontend fields on every load so that
         // switching languages never leaks paths from a previously loaded model.

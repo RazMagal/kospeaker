@@ -7,6 +7,7 @@ import android.speech.tts.SynthesisRequest
 import android.speech.tts.TextToSpeech
 import android.speech.tts.TextToSpeechService
 import android.util.Log
+import com.k2fsa.sherpa.onnx.tts.engine.phonikud.PhonikudEngine
 import com.k2fsa.sherpa.onnx.tts.engine.reading.SentenceChunker
 import com.k2fsa.sherpa.onnx.tts.engine.reading.TextNormalizer
 
@@ -79,7 +80,8 @@ class TtsService : TextToSpeechService() {
 
     override fun onSynthesizeText(request: SynthesisRequest?, callback: SynthesisCallback?) {
         Log.i(TAG, "onSynthesizeText")
-        if (TtsEngine.tts == null || request == null || callback == null) {
+        // Either the sherpa engine OR the phonikud engine must be available.
+        if ((TtsEngine.tts == null && TtsEngine.phonikud == null) || request == null || callback == null) {
             return
         }
         val language = request.language
@@ -110,6 +112,22 @@ class TtsService : TextToSpeechService() {
         // Clean up raw EPUB prose so the neural voice sounds natural: expand
         // abbreviations, turn spaced dashes into pauses, drop footnote artifacts, etc.
         text = TextNormalizer.normalize(text)
+
+        // --- Premium offline Hebrew (phonikud) path ---
+        // The text is already normalized/chunked by the reading pipeline. Route it through the
+        // onnxruntime-android engine (diacritizer -> Piper VITS) and stream PCM16 @ 22050 Hz.
+        // ON-DEVICE UNVERIFIED: this whole path depends on the phonikud ONNX wiring.
+        val phonikud = TtsEngine.phonikud
+        if (phonikud != null) {
+            synthesizePhonikud(phonikud, text, callback)
+            return
+        }
+
+        // createTts may have attempted a phonikud model that failed to load, leaving tts null.
+        if (TtsEngine.tts == null) {
+            callback.error()
+            return
+        }
 
         val tts = TtsEngine.tts!!
 
@@ -145,6 +163,56 @@ class TtsService : TextToSpeechService() {
 
         // Clear state after synthesis is complete
         currentSynthesisCallback = null
+    }
+
+    /**
+     * Synthesize [text] with the phonikud engine, streaming PCM16 @ 22050 Hz through [callback].
+     * Chunks per the reading pipeline, honors the [stopRequested] flag between/within chunks,
+     * applies the current volume, and reports failures via callback.error().
+     *
+     * NOTE: pitch/system-speed are NOT applied here (the Piper VITS length scale is fixed);
+     * volume is. ON-DEVICE UNVERIFIED (depends on the phonikud ONNX path).
+     */
+    private fun synthesizePhonikud(engine: PhonikudEngine, text: String, callback: SynthesisCallback) {
+        callback.start(engine.sampleRate, AudioFormat.ENCODING_PCM_16BIT, 1)
+
+        if (text.isBlank()) {
+            callback.done()
+            return
+        }
+
+        stopRequested = false
+        val volume = TtsEngine.volume.value
+        val maxBufferSize = callback.maxBufferSize
+
+        try {
+            val chunks = SentenceChunker.chunk(text)
+            for (chunk in chunks) {
+                if (stopRequested) break
+
+                val samples = engine.synthesize(chunk)
+                if (samples.isEmpty()) continue
+
+                if (volume != 1.0f) {
+                    for (i in samples.indices) samples[i] *= volume
+                }
+                val bytes = floatArrayToByteArray(samples)
+
+                var offset = 0
+                while (offset < bytes.size) {
+                    if (stopRequested) break
+                    val bytesToWrite = Math.min(maxBufferSize, bytes.size - offset)
+                    callback.audioAvailable(bytes, offset, bytesToWrite)
+                    offset += bytesToWrite
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Phonikud synthesis failed", e)
+            callback.error()
+            return
+        }
+
+        callback.done()
     }
 
     // This MUST be a member function so we can use the ::ttsCallback reference

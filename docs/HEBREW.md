@@ -95,9 +95,70 @@ Read Aloud setup details.
 The MMS voices are **CC-BY-NC 4.0** (non-commercial). Using the converted model
 for your own offline reading is fine; **do not redistribute it commercially**.
 
-## Coming later: premium Hebrew via phonikud
+## Premium Hebrew (phonikud)
 
-A markedly more natural route is planned: an on-device niqqud diacritizer
-(`phonikud-onnx`) adds vowel points, converts to IPA, and drives a **22 kHz
-Roboshaul VITS** voice. That removes most homograph errors and raises audio
-quality well above MMS. Tracked in [`ROADMAP.md`](../ROADMAP.md).
+A markedly more natural, **22 kHz** route than MMS. Instead of feeding raw
+characters to one model, KoSpeaker runs a two-stage on-device pipeline via
+**onnxruntime-android**:
+
+```
+Hebrew text
+  -> phonikud.onnx      (diacritizer / nakdan: adds niqqud + stress + vocal-shva)
+  -> HebrewPhonemizer   (pure-Kotlin rule FST -> IPA phonemes)
+  -> PiperTokenizer     (phoneme -> id sequence)
+  -> shaul.onnx         (Roboshaul Piper VITS, single speaker)
+  -> PCM float @ 22050 Hz
+```
+
+Adding niqqud first removes most of the homograph errors that plague MMS on
+unvocalized text.
+
+> **Status: on-device UNVERIFIED.** The pure-Kotlin core is unit-tested, but the
+> ONNX tensor shapes, output head names and audio quality still need tuning on a
+> real device. Treat this as experimental.
+
+### Models to download
+
+| File | Source | Size |
+|------|--------|------|
+| `phonikud.onnx` | <https://huggingface.co/thewh1teagle/phonikud-onnx/resolve/main/phonikud-1.0.int8.onnx> (rename to `phonikud.onnx`) | ~308 MB |
+| `tokenizer.json` | from <https://huggingface.co/dicta-il/dictabert-large-char-menaked> (its `tokenizer.json`) | small |
+| `shaul.onnx` | <https://huggingface.co/thewh1teagle/phonikud-tts-checkpoints/resolve/main/shaul.onnx> | ~64 MB |
+
+(`model.config.json` is **not** required — the Piper phoneme→id map and inference
+scales are embedded in `PiperTokenizer`.)
+
+### Install
+
+Because the models total ~372 MB, they are **not** copied through the SAF file
+pickers. Instead you register the entry in the app and push the files manually:
+
+1. Open **KoSpeaker -> Manage Languages -> Install from SD**.
+2. Fill in:
+   - **Language code**: `heb`
+   - **Model name**: e.g. `Hebrew (phonikud)`
+   - **Model type**: choose **Phonikud (Hebrew, premium)**
+   - (the model/tokens file pickers are ignored for this type)
+3. Tap **OK**. A toast shows the target folder, e.g.
+   `/sdcard/Android/data/org.woheller69.ttsengine/files/heb`.
+4. Push the three files (exact names) into that folder:
+
+```bash
+adb push phonikud.onnx    /sdcard/Android/data/org.woheller69.ttsengine/files/heb/phonikud.onnx
+adb push tokenizer.json   /sdcard/Android/data/org.woheller69.ttsengine/files/heb/tokenizer.json
+adb push shaul.onnx       /sdcard/Android/data/org.woheller69.ttsengine/files/heb/shaul.onnx
+```
+
+The engine loads them lazily on the first synthesis request for that language.
+
+### Quality expectations
+
+- **Sample rate 22 kHz** — clearer and more natural than the 16 kHz MMS voice.
+- **On-device tuning required.** Audio quality, phoneme coverage and the ONNX
+  I/O wiring are unverified on hardware; expect to iterate on shapes/scales
+  before it sounds right.
+
+### License
+
+Both models are **CC-BY-NC** (non-commercial). Using them for your own offline
+reading is fine; **do not redistribute them commercially**.
