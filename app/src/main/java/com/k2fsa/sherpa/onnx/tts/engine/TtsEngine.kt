@@ -96,9 +96,24 @@ object TtsEngine {
 
         val modelDir = "$externalFilesDir/$lang$country"
 
+        // Reset the per-architecture frontend fields on every load so that
+        // switching languages never leaks paths from a previously loaded model.
+        //
+        // MMS (facebook/mms-tts-*) is a self-contained VITS that ships its own
+        // character tokens: no espeak, no lexicon, no dataDir. sherpa-onnx picks
+        // the character frontend ONLY when BOTH dataDir and lexicon are empty; if
+        // espeak-ng-data is passed as dataDir it selects the espeak frontend and
+        // MMS produces garbage. So force dataDir/lexicon/voices empty for MMS and
+        // keep the bundled espeak-ng-data for Piper/Coqui/Kokoro.
+        val isMms = modelType?.startsWith("vits-mms") == true
+        val isKokoro = modelType?.startsWith("kokoro") == true
+        dataDir = if (isMms) "" else "espeak-ng-data"
+        lexicon = if (isMms) "" else lexicon
+        voices = if (isKokoro) "voices.bin" else ""
+
         var newDataDir = ""
-        if (dataDir != null) {
-            newDataDir = copyDataDir(context, dataDir!!)
+        if (dataDir.isNotEmpty()) {
+            newDataDir = copyDataDir(context, dataDir)
         }
 
         if (dictDir != null) {
@@ -107,14 +122,11 @@ object TtsEngine {
             ruleFsts = "$modelDir/phone.fst,$modelDir/date.fst,$modelDir/number.fst"
         }
 
-        // Branch by model architecture. getOfflineTtsConfig() (sherpa-onnx
-        // v1.13.0) auto-populates the Kokoro sub-config when `voices` is
-        // non-empty, otherwise it builds the VITS/Piper sub-config. Kokoro
-        // ships a voices.bin and reuses the bundled espeak-ng-data as dataDir
-        // (already set above). Reset to null for every other type so switching
-        // back to Piper does not leak the Kokoro voices path.
-        voices = if (modelType?.startsWith("kokoro") == true) "voices.bin" else null
-
+        // getOfflineTtsConfig() (sherpa-onnx v1.13.0) auto-populates the Kokoro
+        // sub-config when `voices` is non-empty, otherwise it builds the
+        // VITS/Piper sub-config (used by Piper, Coqui and MMS). The frontend
+        // (espeak vs character) is then selected from dataDir/lexicon, which were
+        // set per-architecture above.
         val config = getOfflineTtsConfig(
             modelDir = modelDir!!,
             modelName = modelName ?: "",

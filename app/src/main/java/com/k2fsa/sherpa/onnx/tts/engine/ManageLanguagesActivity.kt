@@ -7,6 +7,7 @@ import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
+import android.widget.RadioGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -139,6 +140,7 @@ class ManageLanguagesActivity  : AppCompatActivity() {
         val modelInput = dialogView.findViewById<EditText>(R.id.editTextModelName)
         val selectModelBtn = dialogView.findViewById<Button>(R.id.buttonSelectModel)
         val selectTokensBtn = dialogView.findViewById<Button>(R.id.buttonSelectTokens)
+        val modelTypeGroup = dialogView.findViewById<RadioGroup>(R.id.radioGroupModelType)
         val installBtn = dialogView.findViewById<Button>(R.id.buttonInstall)
 
         // Initialize button text/visibility 
@@ -182,8 +184,18 @@ class ManageLanguagesActivity  : AppCompatActivity() {
                 return@setOnClickListener
             }
 
+            // Model architecture chosen by the user (defaults to Piper).
+            // MMS models (facebook/mms-tts-*) must be stored as "vits-mms" so
+            // TtsEngine loads them with the character frontend (empty dataDir
+            // and lexicon) instead of the espeak frontend used for Piper.
+            val type = if (modelTypeGroup.checkedRadioButtonId == R.id.radioModelTypeMms) {
+                "vits-mms"
+            } else {
+                "vits-piper"
+            }
+
             // Proceed with install
-            installCustomModel(langCode, modelFileUri!!, tokensFileUri!!)
+            installCustomModel(langCode, modelFileUri!!, tokensFileUri!!, type)
         }
 
         val dialog = AlertDialog.Builder(this)
@@ -195,7 +207,7 @@ class ManageLanguagesActivity  : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun installCustomModel(langCode: String, modelUri: Uri, tokensUri: Uri) {
+    private fun installCustomModel(langCode: String, modelUri: Uri, tokensUri: Uri, type: String) {
         // Create directory for the language (country code is empty as requested)
         val directory = File(this.getExternalFilesDir(null), "/$langCode/")
         if (!directory.exists() && !directory.mkdirs()) {
@@ -221,9 +233,9 @@ class ManageLanguagesActivity  : AppCompatActivity() {
             return
         }
         
-        // Add to database as vits-piper model with empty country code
+        // Add to database with the chosen model type and empty country code
         val db = LangDB.getInstance(this)
-        db.addLanguage(modelName, langCode, "", 0, 1.0f, 1.0f, "vits-piper")
+        db.addLanguage(modelName, langCode, "", 0, 1.0f, 1.0f, type)
         
         // Show success message
         Toast.makeText(this, "+ \"$langCode\" = \"$modelName\" ", Toast.LENGTH_SHORT).show()

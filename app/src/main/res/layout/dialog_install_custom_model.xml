@@ -56,6 +56,36 @@
         android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp" />
 
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/model_type_label"
+        android:textStyle="bold"
+        android:layout_marginTop="8dp" />
+
+    <RadioGroup
+        android:id="@+id/radioGroupModelType"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="8dp">
+
+        <RadioButton
+            android:id="@+id/radioModelTypePiper"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="@string/model_type_piper" />
+
+        <RadioButton
+            android:id="@+id/radioModelTypeMms"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/model_type_mms" />
+
+    </RadioGroup>
+
     <Button
         android:id="@+id/buttonInstall"
         android:layout_width="match_parent"
