@@ -3,11 +3,15 @@ package com.k2fsa.sherpa.onnx.tts.engine
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
+import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.RadioGroup
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -30,6 +34,14 @@ class ManageLanguagesActivity  : AppCompatActivity() {
     private var langCode: String = ""
     private var modelName: String = ""
 
+    // Filterable adapters for the three downloadable-voice lists.
+    private var piperAdapter: VoiceAdapter? = null
+    private var coquiAdapter: VoiceAdapter? = null
+    private var kokoroAdapter: VoiceAdapter? = null
+
+    // ISO-639-3 codes of already-installed languages (from LangDB.Language.lang).
+    private var installedLangCodes: Set<String> = emptySet()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityManageLanguagesBinding.inflate(layoutInflater)
@@ -39,86 +51,169 @@ class ManageLanguagesActivity  : AppCompatActivity() {
         val allCoquiModels: Array<String> = resources.getStringArray(R.array.coqui_models)
         val allKokoroModels: Array<String> = resources.getStringArray(R.array.kokoro_models)
 
+        // Installed languages are tracked by ISO-639-3 code in LangDB (Language.lang).
+        // The app allows only one model per language, so instead of hiding installed
+        // languages we now show ALL voices, mark those whose language is already
+        // installed (best-effort match by derived language code) and block
+        // re-downloading them. This gives the installed-marker and the
+        // "show installed only" toggle something to display.
         val db = LangDB.getInstance(this)
-        val installedLanguages = db.allInstalledLanguages
-        val installedLangCodes = installedLanguages.map { it.lang }
+        installedLangCodes = db.allInstalledLanguages.mapNotNull { it.lang }.toHashSet()
 
-        val showPiperModels = mutableListOf<String>()
-        for(model in allPiperModels){
-            val twoLetterCode: String = model.split("_").get(0)
-            val lang = Locale(twoLetterCode).isO3Language
-            if (!installedLangCodes.contains(lang)) showPiperModels.add(model)
-        }
+        // Sort alphabetically (case-insensitive) by the displayed model id for scannability.
+        val piperSorted = allPiperModels.sortedWith(String.CASE_INSENSITIVE_ORDER)
+        val coquiSorted = allCoquiModels.sortedWith(String.CASE_INSENSITIVE_ORDER)
+        val kokoroSorted = allKokoroModels.sortedWith(String.CASE_INSENSITIVE_ORDER)
 
-        val showCoquiModels = mutableListOf<String>()
-        for(model in allCoquiModels){
-            val twoLetterCode: String = model.split("_").get(0)
-            val lang = Locale(twoLetterCode).isO3Language
-            if (!installedLangCodes.contains(lang)) showCoquiModels.add(model)
-        }
-
-        // Kokoro items are of the form "<2-letter-lang>-<version>" (e.g. "en-v0_19").
-        val showKokoroModels = mutableListOf<String>()
-        for(model in allKokoroModels){
-            val twoLetterCode: String = model.split("-").get(0)
-            val lang = Locale(twoLetterCode).isO3Language
-            if (!installedLangCodes.contains(lang)) showKokoroModels.add(model)
-        }
-
-        val piperAdapter = ArrayAdapter(this, R.layout.list_item, R.id.text_view, showPiperModels)
-        val coquiAdapter = ArrayAdapter(this, R.layout.list_item, R.id.text_view, showCoquiModels)
-        val kokoroAdapter = ArrayAdapter(this, R.layout.list_item, R.id.text_view, showKokoroModels)
+        piperAdapter = VoiceAdapter("vits-piper").also { it.submit(piperSorted) }
+        coquiAdapter = VoiceAdapter("vits-coqui").also { it.submit(coquiSorted) }
+        kokoroAdapter = VoiceAdapter("kokoro").also { it.submit(kokoroSorted) }
 
         binding!!.piperModelList.adapter = piperAdapter
-        binding!!.piperModelList.setOnItemClickListener { parent, view, position, id ->
-            val model = showPiperModels.get(position)
+        binding!!.piperModelList.setOnItemClickListener { _, _, position, _ ->
+            val model = piperAdapter?.getItem(position) ?: return@setOnItemClickListener
+            if (isInstalled(model, "vits-piper")) { toastInstalled(); return@setOnItemClickListener }
             val twoLetterCode = model.substring(0, 2)
             val country = model.substring(3, 5)
             val lang = Locale(twoLetterCode).isO3Language
-            val type = "vits-piper"
-            binding!!.piperModelList.visibility = View.GONE
-            binding!!.coquiModelList.visibility = View.GONE
-            binding!!.buttonTestVoices.visibility = View.GONE
-            binding!!.piperHeader.visibility = View.GONE
-            binding!!.coquiHeader.visibility = View.GONE
+            hideBrowseUi()
             binding!!.downloadSize.setText("")
-            Downloader.downloadModels(this, binding, model, lang, country, type)
+            Downloader.downloadModels(this, binding, model, lang, country, "vits-piper")
         }
 
         binding!!.coquiModelList.adapter = coquiAdapter
-        binding!!.coquiModelList.setOnItemClickListener { parent, view, position, id ->
-            val model = showCoquiModels.get(position)
+        binding!!.coquiModelList.setOnItemClickListener { _, _, position, _ ->
+            val model = coquiAdapter?.getItem(position) ?: return@setOnItemClickListener
+            if (isInstalled(model, "vits-coqui")) { toastInstalled(); return@setOnItemClickListener }
             val twoLetterCode = model.substring(0, 2)
             val country = ""
             val lang = Locale(twoLetterCode).isO3Language
-            val type = "vits-coqui"
-            binding!!.piperModelList.visibility = View.GONE
-            binding!!.coquiModelList.visibility = View.GONE
-            binding!!.buttonTestVoices.visibility = View.GONE
-            binding!!.piperHeader.visibility = View.GONE
-            binding!!.coquiHeader.visibility = View.GONE
+            hideBrowseUi()
             binding!!.downloadSize.setText("")
-            Downloader.downloadModels(this, binding, model, lang, country, type)
+            Downloader.downloadModels(this, binding, model, lang, country, "vits-coqui")
         }
 
         binding!!.kokoroModelList.adapter = kokoroAdapter
-        binding!!.kokoroModelList.setOnItemClickListener { parent, view, position, id ->
-            val model = showKokoroModels.get(position)
+        binding!!.kokoroModelList.setOnItemClickListener { _, _, position, _ ->
+            val model = kokoroAdapter?.getItem(position) ?: return@setOnItemClickListener
+            if (isInstalled(model, "kokoro")) { toastInstalled(); return@setOnItemClickListener }
             val twoLetterCode = model.split("-").get(0)
             val country = ""
             val lang = Locale(twoLetterCode).isO3Language
-            val type = "kokoro"
-            binding!!.piperModelList.visibility = View.GONE
-            binding!!.coquiModelList.visibility = View.GONE
-            binding!!.kokoroModelList.visibility = View.GONE
-            binding!!.buttonTestVoices.visibility = View.GONE
-            binding!!.piperHeader.visibility = View.GONE
-            binding!!.coquiHeader.visibility = View.GONE
-            binding!!.kokoroHeader.visibility = View.GONE
+            hideBrowseUi()
             binding!!.downloadSize.setText("")
-            Downloader.downloadModels(this, binding, model, lang, country, type)
+            Downloader.downloadModels(this, binding, model, lang, country, "kokoro")
         }
 
+        // Filter box + "show installed only" toggle both drive applyFilters().
+        binding!!.searchBox.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) { applyFilters() }
+        })
+        binding!!.showInstalledOnly.setOnCheckedChangeListener { _, _ -> applyFilters() }
+        applyFilters()
+    }
+
+    /** Re-run the text + installed-only filters on all three lists and toggle the empty state. */
+    private fun applyFilters() {
+        val b = binding ?: return
+        val query = b.searchBox.text?.toString() ?: ""
+        val installedOnly = b.showInstalledOnly.isChecked
+        piperAdapter?.filter(query, installedOnly)
+        coquiAdapter?.filter(query, installedOnly)
+        kokoroAdapter?.filter(query, installedOnly)
+        val empty = (piperAdapter?.count ?: 0) == 0 &&
+            (coquiAdapter?.count ?: 0) == 0 &&
+            (kokoroAdapter?.count ?: 0) == 0
+        b.noResults.visibility = if (empty) View.VISIBLE else View.GONE
+    }
+
+    /** Hide the whole browse UI once a download starts (matches the pre-existing behaviour). */
+    private fun hideBrowseUi() {
+        val b = binding ?: return
+        b.searchBox.visibility = View.GONE
+        b.showInstalledOnly.visibility = View.GONE
+        b.noResults.visibility = View.GONE
+        b.buttonTestVoices.visibility = View.GONE
+        b.piperHeader.visibility = View.GONE
+        b.coquiHeader.visibility = View.GONE
+        b.kokoroHeader.visibility = View.GONE
+        b.piperModelList.visibility = View.GONE
+        b.coquiModelList.visibility = View.GONE
+        b.kokoroModelList.visibility = View.GONE
+    }
+
+    private fun toastInstalled() {
+        Toast.makeText(this, R.string.language_already_installed, Toast.LENGTH_SHORT).show()
+    }
+
+    // Best-effort language-code derivation, mirroring the download click handlers:
+    // piper/coqui take the first two chars, kokoro the part before the first "-".
+    private fun code2Of(model: String, type: String): String {
+        return if (type == "kokoro") model.substringBefore("-")
+        else if (model.length >= 2) model.substring(0, 2) else model
+    }
+
+    private fun iso3Of(code2: String): String {
+        return try { if (code2.isEmpty()) "" else Locale(code2).isO3Language } catch (e: Exception) { "" }
+    }
+
+    // Best-effort: a voice is "installed" if its derived ISO-639-3 language code is
+    // already present in LangDB. Because installs are tracked per language (one model
+    // per language), every voice sharing that language is marked/blocked.
+    private fun isInstalled(model: String, type: String): Boolean {
+        val iso3 = iso3Of(code2Of(model, type))
+        return iso3.isNotEmpty() && installedLangCodes.contains(iso3)
+    }
+
+    // Text used for filtering: model id + display language name + 2-letter + ISO-639-3 codes.
+    private fun searchableText(model: String, type: String): String {
+        val code2 = code2Of(model, type)
+        val name = try { Locale(code2).displayLanguage } catch (e: Exception) { "" }
+        return (model + " " + name + " " + code2 + " " + iso3Of(code2)).lowercase(Locale.ROOT)
+    }
+
+    /** ArrayAdapter that keeps the full list and shows a filtered view + installed marker. */
+    private inner class VoiceAdapter(private val type: String) :
+        ArrayAdapter<String>(this@ManageLanguagesActivity, R.layout.list_item, R.id.text_view) {
+
+        private val full = ArrayList<String>()
+        private var query = ""
+        private var installedOnly = false
+
+        fun submit(items: List<String>) {
+            full.clear()
+            full.addAll(items)
+            apply()
+        }
+
+        fun filter(q: String, onlyInstalled: Boolean) {
+            query = q.trim().lowercase(Locale.ROOT)
+            installedOnly = onlyInstalled
+            apply()
+        }
+
+        private fun apply() {
+            val result = full.filter { model ->
+                (!installedOnly || isInstalled(model, type)) &&
+                    (query.isEmpty() || searchableText(model, type).contains(query))
+            }
+            setNotifyOnChange(false)
+            clear()
+            addAll(result)
+            notifyDataSetChanged()
+        }
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = super.getView(position, convertView, parent)
+            val model = getItem(position)
+            if (model != null && isInstalled(model, type)) {
+                view.findViewById<TextView>(R.id.text_view).text =
+                    getString(R.string.installed_prefix, model)
+            }
+            return view
+        }
     }
 
     fun startMain(view: View) {

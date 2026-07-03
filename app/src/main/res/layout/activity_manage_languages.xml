@@ -112,6 +112,37 @@
                 android:orientation="vertical"
                 android:gravity="center_horizontal">
 
+                <!-- Filter box: type to filter the voice lists below by language
+                     name or code (case-insensitive). Clearing it restores all. -->
+                <EditText
+                    android:id="@+id/search_box"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="8dp"
+                    android:padding="12dp"
+                    android:background="@drawable/rounded_frame_thin"
+                    android:hint="@string/search_hint"
+                    android:textColor="@color/primaryDark"
+                    android:textColorHint="@color/grey"
+                    android:textSize="18dp"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:imeOptions="actionSearch"
+                    android:importantForAutofill="no" />
+
+                <CheckBox
+                    android:id="@+id/show_installed_only"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:layout_marginBottom="8dp"
+                    android:buttonTint="@color/primaryDark"
+                    android:textColor="@color/primaryDark"
+                    android:textSize="16dp"
+                    android:text="@string/show_installed_only" />
+
                 <TextView
                     android:id="@+id/piper_header"
                     android:layout_width="match_parent"
@@ -170,6 +201,20 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginHorizontal="5dp" />
+
+                <!-- Shown when the current filter matches no voices in any list. -->
+                <TextView
+                    android:id="@+id/no_results"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center"
+                    android:padding="16dp"
+                    android:visibility="gone"
+                    android:textStyle="bold"
+                    android:textColor="@color/primaryDark"
+                    android:textSize="18dp"
+                    android:text="@string/no_matching_languages" />
 
             </LinearLayout>
 

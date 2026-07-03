@@ -37,6 +37,13 @@
     <string name="error_copying_files">Error copying files</string>
     <string name="preload_model">Preload model after boot</string>
 
+    <!-- Manage Languages: filter / installed marker / toggle -->
+    <string name="search_hint">Search language or code</string>
+    <string name="show_installed_only">Show installed only</string>
+    <string name="no_matching_languages">No matching languages</string>
+    <!-- Leading marker prepended to voices whose language is already installed. -->
+    <string name="installed_prefix">✓ %1$s</string>
+
     <!-- Setup / How to use with KOReader screen -->
     <string name="setup_title">Set up with KOReader</string>
     <string name="setup_back">Back</string>
