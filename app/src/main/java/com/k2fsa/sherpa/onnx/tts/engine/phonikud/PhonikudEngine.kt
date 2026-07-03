@@ -20,14 +20,28 @@ class PhonikudEngine private constructor(
 
     /** Hebrew (optionally bare) -> PCM float @ 22050 Hz. */
     fun synthesize(hebrew: String): FloatArray {
-        val diacritized = diacritizer.diacritize(hebrew)
-        val audio = voice.synthesize(diacritized)
+        val diacritized = diacritize(hebrew)
+        val audio = synthesizeDiacritized(diacritized)
         android.util.Log.i(
             "KoSpeakerPhonikud",
             "in='${hebrew.take(40)}' niqqud='${diacritized.take(60)}' samples=${audio.size}",
         )
         return audio
     }
+
+    /**
+     * Run ONLY the heavy 308MB diacritizer (bare Hebrew -> Hebrew with niqqud).
+     * Split out from [synthesize] so callers can diacritize a whole utterance ONCE
+     * and then stream the fast VITS voice sentence-by-sentence (see
+     * [synthesizeDiacritized]). Runs the big ONNX session; call off the main thread.
+     */
+    fun diacritize(text: String): String = diacritizer.diacritize(text)
+
+    /**
+     * Run ONLY the fast VITS voice on already-[diacritize]d Hebrew -> PCM float @ 22050 Hz.
+     * Cheap enough to call per sentence chunk for low-latency streaming.
+     */
+    fun synthesizeDiacritized(diacritized: String): FloatArray = voice.synthesize(diacritized)
 
     override fun close() {
         try {

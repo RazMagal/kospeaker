@@ -59,11 +59,13 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.woheller69.freeDroidWarn.FreeDroidWarn
 import java.io.File
 
@@ -79,6 +81,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var preferenceHelper: PreferenceHelper
     private lateinit var langDB: LangDB
 
+    // True while the TTS engine (esp. the 308MB phonikud diacritizer) loads on a
+    // background coroutine. Compose reads this to show a "Loading voice…" hint and
+    // disable Play until the model is ready. Written on the main thread only.
+    private val modelLoading = mutableStateOf(true)
+
     override fun onPause() {
         super.onPause()
         samplesChannel.close()
@@ -88,8 +95,10 @@ class MainActivity : ComponentActivity() {
         //Reset speed in case it has been changed by TtsService
         val db = LangDB.getInstance(this)
         val allLanguages = db.allInstalledLanguages
-        val currentLanguage = allLanguages.first { it.lang == TtsEngine.lang }
-        TtsEngine.speed.value = currentLanguage.speed
+        // TtsEngine.lang may still be unset while the engine loads asynchronously
+        // (see onCreate), so guard with firstOrNull to avoid crashing on first open.
+        allLanguages.firstOrNull { it.lang == TtsEngine.lang }
+            ?.let { TtsEngine.speed.value = it.speed }
         super.onResume()
     }
 
@@ -99,8 +108,11 @@ class MainActivity : ComponentActivity() {
         langDB = LangDB.getInstance(this)
         Migrate.renameModelFolder(this)   //Rename model folder if "old" structure
         if (!preferenceHelper.getCurrentLanguage().equals("")) {
-            TtsEngine.createTts(this, preferenceHelper.getCurrentLanguage()!!)
-            initAudioTrack()
+            // Show the UI immediately, then load the engine OFF the main thread. The
+            // premium Hebrew (phonikud) diacritizer is ~308MB and would otherwise
+            // freeze app open on the main thread. Play stays disabled (modelLoading)
+            // until the load finishes; sherpa engines load fast but use the same path.
+            modelLoading.value = true
             setupDisplay(langDB, preferenceHelper)
             ThemeUtil.setStatusBarAppearance(this)
             FreeDroidWarn.showWarningOnUpgrade(this, BuildConfig.VERSION_CODE)
@@ -108,6 +120,23 @@ class MainActivity : ComponentActivity() {
                 this,
                 "https://github.com/woheller69/ttsengine"
             )
+            lifecycleScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        TtsEngine.createTts(this@MainActivity, preferenceHelper.getCurrentLanguage()!!)
+                    }
+                } catch (e: Exception) {
+                    // Don't hang the UI on a failed load: log and fall through to
+                    // clear the loading state below so Play re-enables.
+                    Log.e(TAG, "Failed to load TTS engine", e)
+                } finally {
+                    // Back on the main thread (lifecycleScope defaults to Main). Init
+                    // the AudioTrack now that the engine's sample rate is known, then
+                    // clear the loading flag to enable Play and refresh speaker info.
+                    initAudioTrack()
+                    modelLoading.value = false
+                }
+            }
         } else {
             val intent = Intent(this, ManageLanguagesActivity::class.java)
             startActivity(intent)
@@ -169,10 +198,16 @@ class MainActivity : ComponentActivity() {
                         }
                     }) {
                     Box(modifier = Modifier.padding(it)) {
-                        var sampleText by remember { mutableStateOf(getSampleText(TtsEngine.lang ?: "")) }
+                        // Seed the sample from the persisted language, not TtsEngine.lang,
+                        // since the engine may still be loading asynchronously (see onCreate).
+                        var sampleText by remember { mutableStateOf(getSampleText(preferenceHelper.getCurrentLanguage() ?: "")) }
                         val numLanguages = langDB.allInstalledLanguages.size
                         val allLanguages = langDB.allInstalledLanguages
                         var currentLanguage = allLanguages.indexOfFirst { it.lang == preferenceHelper.getCurrentLanguage()!! }
+                        // Reading modelLoading here subscribes this scope, so when the async
+                        // load finishes the UI recomposes: numSpeakers is re-read and Play
+                        // re-enables. True until the engine (esp. 308MB phonikud) is ready.
+                        val loading = modelLoading.value
                         // Phonikud (premium Hebrew) keeps TtsEngine.tts null and is single-speaker.
                         val numSpeakers = TtsEngine.tts?.numSpeakers() ?: 1
 
@@ -518,10 +553,23 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            // Shown while the engine loads asynchronously (see onCreate);
+                            // pairs with the disabled Play button below.
+                            if (loading) {
+                                item {
+                                    Text(
+                                        text = "Loading voice…",
+                                        modifier = Modifier.padding(start = 5.dp, bottom = 4.dp)
+                                    )
+                                }
+                            }
+
                             item {
                                 Row {
                                     Button(
-                                        enabled = true,
+                                        // Disabled until the model finishes loading so a tap
+                                        // before the engine is ready can't hit a null engine.
+                                        enabled = !loading,
                                         modifier = Modifier.padding(5.dp),
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = colorResource(R.color.primaryDark),
@@ -562,11 +610,16 @@ class MainActivity : ComponentActivity() {
                                                 CoroutineScope(Dispatchers.Default).launch {
                                                     val phonikud = TtsEngine.phonikud
                                                     if (phonikud != null) {
-                                                        // Premium Hebrew: chunk + synthesize via ONNX,
-                                                        // reusing the same ::callback -> AudioTrack path.
-                                                        for (chunk in SentenceChunker.chunk(sampleText)) {
+                                                        // Premium Hebrew FIX: run the heavy 308MB
+                                                        // diacritizer ONCE over the full text, THEN
+                                                        // chunk the diacritized text and stream the
+                                                        // fast VITS voice per sentence via the same
+                                                        // ::callback -> AudioTrack path (avoids the
+                                                        // per-chunk diacritizer stutter).
+                                                        val diacritized = phonikud.diacritize(sampleText)
+                                                        for (chunk in SentenceChunker.chunk(diacritized)) {
                                                             if (stopped) break
-                                                            val samples = phonikud.synthesize(chunk)
+                                                            val samples = phonikud.synthesizeDiacritized(chunk)
                                                             if (samples.isNotEmpty()) callback(samples)
                                                         }
                                                     } else {
@@ -594,8 +647,13 @@ class MainActivity : ComponentActivity() {
                                         ),
                                         onClick = {
                                             stopped = true
-                                            track.pause()
-                                            track.flush()
+                                            // track is initialized only after the async load
+                                            // (see onCreate); guard so a Stop tap during
+                                            // loading can't hit the lateinit track.
+                                            if (this@MainActivity::track.isInitialized) {
+                                                track.pause()
+                                                track.flush()
+                                            }
                                         }) {
                                         Image(
                                             painter = painterResource(id = R.drawable.ic_stop_24dp),

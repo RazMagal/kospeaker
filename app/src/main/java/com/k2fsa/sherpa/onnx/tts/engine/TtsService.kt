@@ -186,11 +186,15 @@ class TtsService : TextToSpeechService() {
         val maxBufferSize = callback.maxBufferSize
 
         try {
-            val chunks = SentenceChunker.chunk(text)
+            // Phonikud FIX: run the heavy 308MB diacritizer ONCE over the whole utterance,
+            // THEN chunk the diacritized text and stream the fast VITS voice per sentence.
+            // (Previously the diacritizer ran per chunk, starving AudioTrack -> underruns.)
+            val diacritized = engine.diacritize(text)
+            val chunks = SentenceChunker.chunk(diacritized)
             for (chunk in chunks) {
                 if (stopRequested) break
 
-                val samples = engine.synthesize(chunk)
+                val samples = engine.synthesizeDiacritized(chunk)
                 if (samples.isEmpty()) continue
 
                 if (volume != 1.0f) {
