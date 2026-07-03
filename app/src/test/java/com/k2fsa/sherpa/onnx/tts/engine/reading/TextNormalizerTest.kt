@@ -56,7 +56,8 @@ class TextNormalizerTest {
 
     @Test
     fun noDotBecomesNumberOnlyBeforeADigit() {
-        assertEquals("Room Number 7 is here.", TextNormalizer.normalize("Room No. 7 is here."))
+        // "7" is now spelled out by the number verbalizer (default-on).
+        assertEquals("Room Number seven is here.", TextNormalizer.normalize("Room No. 7 is here."))
         val refusal = TextNormalizer.normalize("No. I will not.")
         assertTrue(refusal.contains("No."))
         assertFalse(refusal.contains("Number"))
@@ -71,7 +72,8 @@ class TextNormalizerTest {
 
     @Test
     fun spacedEnDashBecomesComma() {
-        assertEquals("pages 3, 5 total", TextNormalizer.normalize("pages 3 – 5 total"))
+        // The digits are spelled out first, then the spaced en dash becomes a comma.
+        assertEquals("pages three, five total", TextNormalizer.normalize("pages 3 – 5 total"))
     }
 
     @Test
@@ -222,5 +224,21 @@ class TextNormalizerTest {
     fun smartQuotesAndEllipsisNormalizedInHebrew() {
         assertEquals("\"שלום\"", TextNormalizer.normalize("“שלום”"))
         assertEquals("שלום...", TextNormalizer.normalize("שלום…"))
+    }
+
+    // --- Number verbalization: end-to-end integration -------------------------
+
+    @Test
+    fun verbalizesNumbersInEnglishParagraph() {
+        assertEquals(
+            "In nineteen ninety-six he paid one thousand two hundred fifty dollars for three books.",
+            TextNormalizer.normalize("In 1996 he paid \$1,250 for 3 books."),
+        )
+    }
+
+    @Test
+    fun verbalizesEmbeddedNumberInHebrewSoItSurvives() {
+        // A raw digit would be dropped by the Hebrew MMS voice; it must become a word.
+        assertEquals("יש לי שלושה ספרים", TextNormalizer.normalize("יש לי 3 ספרים"))
     }
 }

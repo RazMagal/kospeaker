@@ -24,6 +24,10 @@ package com.k2fsa.sherpa.onnx.tts.engine.reading
  * @property stripHebrewNiqqud      Remove Hebrew niqqud (vowel points) and
  *                                  cantillation marks. Off by default because
  *                                  some Hebrew voices read pointed text better.
+ * @property verbalizeNumbers       Spell digit sequences out as words (see
+ *                                  [NumberVerbalizer]) so numbers are read aloud
+ *                                  naturally. Essential for Hebrew, whose MMS
+ *                                  voice has no digits in its vocabulary.
  * @property autoDetectScript       When [script] is `null`, detect the dominant
  *                                  script of the input and adapt the pipeline;
  *                                  when `false` (and [script] is `null`) the
@@ -42,6 +46,7 @@ data class NormalizerOptions(
     val stripBrackets: Boolean = true,
     val stripSuperscriptDigits: Boolean = true,
     val stripHebrewNiqqud: Boolean = false,
+    val verbalizeNumbers: Boolean = true,
     val autoDetectScript: Boolean = true,
     val script: TextScript? = null,
 )
@@ -144,6 +149,9 @@ object TextNormalizer {
         if (options.stripSuperscriptDigits && englishAware) s = SUPERSCRIPT_DIGITS.replace(s, "")
         if (options.stripBrackets && englishAware) s = BRACKET_CITATION.replace(s, "")
         if (options.expandAbbreviations && englishAware) s = expandAbbreviations(s)
+        // Spell numbers out (script-aware) after the language-specific text steps
+        // but before dash/whitespace tidy-up, so the words join up cleanly.
+        if (options.verbalizeNumbers) s = NumberVerbalizer.verbalize(s, script)
         if (options.dashesToPauses) s = SPACED_DASH.replace(s, ", ")
         if (options.collapseWhitespace) s = collapseWhitespace(s)
 
