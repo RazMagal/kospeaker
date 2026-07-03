@@ -63,9 +63,15 @@ class PhonikudVoice(modelDir: String) : AutoCloseable {
 
         val result = session.run(inputs)
         try {
-            // output: float32[1, 1, N] -> flatten batch/channel.
-            val audio = result.get(0).value as Array<Array<FloatArray>>
-            return audio[0][0]
+            // shaul.onnx returns the waveform as a float tensor whose exact rank
+            // varies by export ([1,1,N] or [1,1,1,N] observed on-device). Read the
+            // flat float buffer so we are rank-agnostic; the batch/channel dims are
+            // all 1, so the buffer is exactly the mono PCM samples.
+            val out = result.get(0) as OnnxTensor
+            val fb = out.floatBuffer
+            val audio = FloatArray(fb.remaining())
+            fb.get(audio)
+            return audio
         } finally {
             result.close()
             inputTensor.close()
