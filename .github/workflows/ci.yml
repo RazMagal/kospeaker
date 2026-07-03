@@ -34,10 +34,12 @@ jobs:
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
 
-      - name: Run lint
-        run: ./gradlew lintDebug
-        continue-on-error: true
-
+      # NOTE: `./gradlew lintDebug` is intentionally not run here. AGP's lint
+      # partial-analysis crashes with an NPE inside the Compose library's
+      # AutoboxingStateCreationDetector (a known bug in the lint tool, not in
+      # this project's code), and the crash cannot be suppressed via disable/
+      # abortOnError because partial analysis runs detectors before those apply.
+      # The quality gates are the unit test suite and a full debug build below.
       - name: Assemble debug APK
         run: ./gradlew assembleDebug
 
