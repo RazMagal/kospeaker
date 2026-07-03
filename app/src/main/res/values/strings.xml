@@ -41,6 +41,9 @@
     <string name="search_hint">Search language or code</string>
     <string name="show_installed_only">Show installed only</string>
     <string name="no_matching_languages">No matching languages</string>
+    <!-- Tappable hint shown when the filter query matches Hebrew (Hebrew is not a
+         downloadable Piper/Kokoro voice; it comes via MMS or Phonikud). -->
+    <string name="hebrew_offline_hint">Hebrew (offline)\nAvailable via MMS or Phonikud (premium) — not a downloadable voice. Tap here to install from SD Card, or push models via ADB.</string>
     <!-- Leading marker prepended to voices whose language is already installed. -->
     <string name="installed_prefix">✓ %1$s</string>
 

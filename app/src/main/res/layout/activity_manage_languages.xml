@@ -143,6 +143,27 @@
                     android:textSize="16dp"
                     android:text="@string/show_installed_only" />
 
+                <!-- Hebrew is NOT a downloadable Piper/Coqui/Kokoro voice; it ships
+                     via MMS (SD-card sideload) or Phonikud (ADB-pushed models).
+                     This hint stays GONE and is shown by applyFilters() only when the
+                     filter query matches Hebrew. Tapping it opens the SD-install dialog. -->
+                <TextView
+                    android:id="@+id/hebrew_hint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:layout_marginBottom="10dp"
+                    android:padding="12dp"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:visibility="gone"
+                    android:textStyle="bold"
+                    android:textColor="@color/primaryDark"
+                    android:background="@drawable/rounded_frame_thin"
+                    android:textSize="16dp"
+                    android:text="@string/hebrew_offline_hint" />
+
                 <TextView
                     android:id="@+id/piper_header"
                     android:layout_width="match_parent"

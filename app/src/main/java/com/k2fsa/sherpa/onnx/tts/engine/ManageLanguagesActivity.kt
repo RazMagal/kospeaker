@@ -112,6 +112,9 @@ class ManageLanguagesActivity  : AppCompatActivity() {
             override fun afterTextChanged(s: Editable?) { applyFilters() }
         })
         binding!!.showInstalledOnly.setOnCheckedChangeListener { _, _ -> applyFilters() }
+        // Hebrew isn't a downloadable Piper/Kokoro voice; the hint (shown by the
+        // filter) opens the same Install-from-SD dialog, which has MMS/Phonikud radios.
+        binding!!.hebrewHint.setOnClickListener { sdInstall() }
         applyFilters()
     }
 
@@ -123,10 +126,25 @@ class ManageLanguagesActivity  : AppCompatActivity() {
         piperAdapter?.filter(query, installedOnly)
         coquiAdapter?.filter(query, installedOnly)
         kokoroAdapter?.filter(query, installedOnly)
+        // Hebrew has no downloadable voice, so surface the offline hint when the
+        // query matches Hebrew and suppress the "no matching languages" empty state.
+        val hebrew = matchesHebrew(query)
+        b.hebrewHint.visibility = if (hebrew) View.VISIBLE else View.GONE
         val empty = (piperAdapter?.count ?: 0) == 0 &&
             (coquiAdapter?.count ?: 0) == 0 &&
             (kokoroAdapter?.count ?: 0) == 0
-        b.noResults.visibility = if (empty) View.VISIBLE else View.GONE
+        b.noResults.visibility = if (empty && !hebrew) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * True when the filter query refers to Hebrew: the (lowercased) query is a
+     * substring of "hebrew" (covers "he"/"heb"/"hebr"...), or it involves the
+     * Hebrew word "עברית". Empty queries never match.
+     */
+    private fun matchesHebrew(query: String): Boolean {
+        val q = query.trim().lowercase(Locale.ROOT)
+        if (q.isEmpty()) return false
+        return "hebrew".contains(q) || q.contains("עברית") || "עברית".contains(q)
     }
 
     /** Hide the whole browse UI once a download starts (matches the pre-existing behaviour). */
@@ -134,6 +152,7 @@ class ManageLanguagesActivity  : AppCompatActivity() {
         val b = binding ?: return
         b.searchBox.visibility = View.GONE
         b.showInstalledOnly.visibility = View.GONE
+        b.hebrewHint.visibility = View.GONE
         b.noResults.visibility = View.GONE
         b.buttonTestVoices.visibility = View.GONE
         b.piperHeader.visibility = View.GONE
