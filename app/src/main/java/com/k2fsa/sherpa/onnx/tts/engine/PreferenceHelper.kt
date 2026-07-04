@@ -37,6 +37,25 @@ class PreferenceHelper(context: Context) {
         return sharedPreferences.getString(CURRENT_LANGUAGE, "")
     }
 
+    // Which installed voice is active for a given language code. Several voices may
+    // share one language (e.g. two English voices); this pins the one to load. Stored
+    // as the voice's unique model folder. Null/absent -> caller falls back to the first.
+    fun setActiveVoiceFolder(language: String, folder: String) {
+        val editor = sharedPreferences.edit()
+        editor.putString("active_voice_$language", folder)
+        editor.apply()
+    }
+
+    fun getActiveVoiceFolder(language: String): String? {
+        return sharedPreferences.getString("active_voice_$language", null)
+    }
+
+    fun clearActiveVoiceFolder(language: String) {
+        val editor = sharedPreferences.edit()
+        editor.remove("active_voice_$language")
+        editor.apply()
+    }
+
     fun setApplySystemSpeed(useSystem: Boolean){
         val editor = sharedPreferences.edit()
         editor.putBoolean(USE_SYSTEM_SPEED, useSystem)

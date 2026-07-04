@@ -22,7 +22,8 @@ public class Migrate {
             PreferenceHelper preferenceHelper = new PreferenceHelper(context);
             preferenceHelper.setCurrentLanguage(model[0]);
             LangDB langDB = LangDB.getInstance(context);
-            langDB.addLanguage(model[1], model[0], "", 0, 1.0f, 1.0f, "vits-piper");
+            // Old structure had a single voice per language; its folder is just the lang code.
+            langDB.addLanguage(model[1], model[0], "", 0, 1.0f, 1.0f, "vits-piper", model[0]);
         }
     }
 

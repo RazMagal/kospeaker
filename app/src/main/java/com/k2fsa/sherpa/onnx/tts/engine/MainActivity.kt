@@ -95,9 +95,9 @@ class MainActivity : ComponentActivity() {
         //Reset speed in case it has been changed by TtsService
         val db = LangDB.getInstance(this)
         val allLanguages = db.allInstalledLanguages
-        // TtsEngine.lang may still be unset while the engine loads asynchronously
+        // TtsEngine.folder may still be unset while the engine loads asynchronously
         // (see onCreate), so guard with firstOrNull to avoid crashing on first open.
-        allLanguages.firstOrNull { it.lang == TtsEngine.lang }
+        allLanguages.firstOrNull { it.folder == TtsEngine.folder }
             ?.let { TtsEngine.speed.value = it.speed }
         super.onResume()
     }
@@ -201,9 +201,14 @@ class MainActivity : ComponentActivity() {
                         // Seed the sample from the persisted language, not TtsEngine.lang,
                         // since the engine may still be loading asynchronously (see onCreate).
                         var sampleText by remember { mutableStateOf(getSampleText(preferenceHelper.getCurrentLanguage() ?: "")) }
-                        val numLanguages = langDB.allInstalledLanguages.size
                         val allLanguages = langDB.allInstalledLanguages
-                        var currentLanguage = allLanguages.indexOfFirst { it.lang == preferenceHelper.getCurrentLanguage()!! }
+                        val currentLangCode = preferenceHelper.getCurrentLanguage() ?: ""
+                        // Distinct language codes for the Language picker; the voices sharing
+                        // the current language for the Voice picker.
+                        val distinctLangs = allLanguages.map { it.lang }.distinct()
+                        val voicesForCurrent = allLanguages.filter { it.lang == currentLangCode }
+                        val activeFolder = preferenceHelper.getActiveVoiceFolder(currentLangCode)
+                            ?: voicesForCurrent.firstOrNull()?.folder
                         // Reading modelLoading here subscribes this scope, so when the async
                         // load finishes the UI recomposes: numSpeakers is re-read and Play
                         // re-enables. True until the engine (esp. 308MB phonikud) is ready.
@@ -250,8 +255,8 @@ class MainActivity : ComponentActivity() {
                                         TtsEngine.speed.value = it
                                     },
                                     onValueChangeFinished = {
-                                        langDB.updateLang(
-                                            TtsEngine.lang,
+                                        langDB.updateVoiceSettings(
+                                            TtsEngine.folder,
                                             TtsEngine.speakerId.value,
                                             TtsEngine.speed.value,
                                             TtsEngine.volume.value
@@ -348,6 +353,7 @@ class MainActivity : ComponentActivity() {
 
                             item { Spacer(modifier = Modifier.height(10.dp)) }
 
+                            // Language picker: one entry per distinct installed language.
                             item {
                                 Box(modifier = Modifier.fillMaxWidth()) {
                                     var expanded by remember { mutableStateOf(false) }
@@ -357,11 +363,8 @@ class MainActivity : ComponentActivity() {
                                     ) {
                                         val keyboardController =
                                             LocalSoftwareKeyboardController.current
-                                        var displayText = allLanguages[currentLanguage].lang
-                                        if (allLanguages[currentLanguage].name.isNotEmpty()) displayText =
-                                            "$displayText (${allLanguages[currentLanguage].name})"
                                         OutlinedTextField(
-                                            value = displayText,
+                                            value = currentLangCode,
                                             onValueChange = {},
                                             readOnly = true,
                                             label = { Text(getString(R.string.language_id)) },
@@ -385,22 +388,76 @@ class MainActivity : ComponentActivity() {
                                             expanded = expanded,
                                             onDismissRequest = { expanded = false }
                                         ) {
-                                            val langList = (0 until numLanguages).toList()
-                                            langList.forEach { langId ->
-                                                var dropdownText = allLanguages[langId].lang
-                                                if (allLanguages[langId].name.isNotEmpty()) dropdownText =
-                                                    "$dropdownText (${allLanguages[langId].name})"
+                                            distinctLangs.forEach { langCode ->
                                                 DropdownMenuItem(
-                                                    text = { Text(dropdownText) },
+                                                    text = { Text(langCode) },
                                                     onClick = {
-                                                        currentLanguage = langId
-                                                        preferenceHelper.setCurrentLanguage(
-                                                            allLanguages[langId].lang
-                                                        )
+                                                        preferenceHelper.setCurrentLanguage(langCode)
                                                         expanded = false
                                                         restart()
                                                     }
                                                 )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Voice picker: which installed voice is active for the current
+                            // language. Only shown when the language actually has voices.
+                            if (voicesForCurrent.isNotEmpty()) {
+                                item { Spacer(modifier = Modifier.height(10.dp)) }
+                                item {
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        var expanded by remember { mutableStateOf(false) }
+                                        val activeVoice =
+                                            voicesForCurrent.firstOrNull { it.folder == activeFolder }
+                                                ?: voicesForCurrent.first()
+                                        ExposedDropdownMenuBox(
+                                            expanded = expanded,
+                                            onExpandedChange = { expanded = it }
+                                        ) {
+                                            val keyboardController =
+                                                LocalSoftwareKeyboardController.current
+                                            OutlinedTextField(
+                                                value = if (activeVoice.name.isNotEmpty()) activeVoice.name else activeVoice.folder,
+                                                onValueChange = {},
+                                                readOnly = true,
+                                                label = { Text(getString(R.string.voice_id)) },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .menuAnchor()
+                                                    .onFocusChanged { focusState ->
+                                                        if (focusState.isFocused) {
+                                                            expanded = true
+                                                            keyboardController?.hide()
+                                                        }
+                                                    },
+                                                trailingIcon = {
+                                                    Icon(
+                                                        Icons.Default.ArrowDropDown,
+                                                        contentDescription = "Dropdown"
+                                                    )
+                                                }
+                                            )
+                                            ExposedDropdownMenu(
+                                                expanded = expanded,
+                                                onDismissRequest = { expanded = false }
+                                            ) {
+                                                voicesForCurrent.forEach { voice ->
+                                                    val label = if (voice.name.isNotEmpty()) voice.name else voice.folder
+                                                    DropdownMenuItem(
+                                                        text = { Text(label) },
+                                                        onClick = {
+                                                            preferenceHelper.setActiveVoiceFolder(
+                                                                currentLangCode,
+                                                                voice.folder
+                                                            )
+                                                            expanded = false
+                                                            restart()
+                                                        }
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -451,8 +508,8 @@ class MainActivity : ComponentActivity() {
                                                         onClick = {
                                                             selectedSpeaker.value = speakerId
                                                             TtsEngine.speakerId.value = speakerId
-                                                            langDB.updateLang(
-                                                                TtsEngine.lang,
+                                                            langDB.updateVoiceSettings(
+                                                                TtsEngine.folder,
                                                                 TtsEngine.speakerId.value,
                                                                 TtsEngine.speed.value,
                                                                 TtsEngine.volume.value
@@ -496,7 +553,7 @@ class MainActivity : ComponentActivity() {
                                             contentColor = colorResource(R.color.white)
                                         ),
                                         onClick = {
-                                            deleteLang(preferenceHelper.getCurrentLanguage())
+                                            deleteActiveVoice()
                                         }) {
                                         Image(
                                             painter = painterResource(id = R.drawable.ic_delete_24dp),
@@ -537,8 +594,8 @@ class MainActivity : ComponentActivity() {
                                         TtsEngine.volume.value = it
                                     },
                                     onValueChangeFinished = {
-                                        langDB.updateLang(
-                                            TtsEngine.lang,
+                                        langDB.updateVoiceSettings(
+                                            TtsEngine.folder,
                                             TtsEngine.speakerId.value,
                                             TtsEngine.speed.value,
                                             TtsEngine.volume.value
@@ -669,33 +726,42 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun deleteLang(currentLanguage: String?) {
+    // Delete only the voice that is currently active for the current language (not every
+    // voice sharing that language). Falls back to another voice of the same language, then
+    // to any other installed language.
+    private fun deleteActiveVoice() {
+        val currentLang = preferenceHelper.getCurrentLanguage()
+        if (currentLang.isNullOrEmpty()) { restart(); return }
+        val rows = langDB.allInstalledLanguages.filter { it.lang == currentLang }
+        if (rows.isEmpty()) { restart(); return }
+        val activeFolder = preferenceHelper.getActiveVoiceFolder(currentLang)
+        val victim = rows.firstOrNull { it.folder == activeFolder } ?: rows.first()
 
-        // Clear current TTS instance
-        TtsEngine.tts = null
-        // Remove from internal cache
-        TtsEngine.removeLanguageFromCache(currentLanguage!!)
+        // Release the engine + its cache entry before deleting the files. clearLoaded()
+        // also releases a live phonikud engine and resets the stale folder, which a bare
+        // cache eviction would miss.
+        TtsEngine.removeVoiceFromCache(victim.folder)
+        TtsEngine.clearLoaded()
 
-        val country: String
-        val allLanguages = langDB.allInstalledLanguages
-        country = allLanguages.first { it.lang == currentLanguage }.country
-
-        val subdirectoryName = currentLanguage + country
-        val subdirectory = File(getExternalFilesDir(null), subdirectoryName)
-
-        if (subdirectory.exists() && subdirectory.isDirectory) {
-            val files = subdirectory.listFiles()
-
-            files?.forEach { file ->
-                if (file.isFile) {
-                    file.delete()
-                }
+        // Guard against a blank folder, which would resolve to the whole files dir.
+        if (victim.folder.isNotBlank()) {
+            val subdirectory = File(getExternalFilesDir(null), victim.folder)
+            if (subdirectory.exists() && subdirectory.isDirectory) {
+                subdirectory.listFiles()?.forEach { file -> if (file.isFile) file.delete() }
+                subdirectory.delete()
             }
+        }
+        langDB.removeByFolder(victim.folder)
+        preferenceHelper.clearActiveVoiceFolder(currentLang)
 
-            subdirectory.delete()
-            langDB.removeLang(currentLanguage)
-            if (langDB.allInstalledLanguages.isEmpty()) preferenceHelper.setCurrentLanguage("")
-            else preferenceHelper.setCurrentLanguage(langDB.allInstalledLanguages[0].lang)
+        // Choose what to show next: another voice of this language, else another language.
+        val remainingSameLang = langDB.allInstalledLanguages.filter { it.lang == currentLang }
+        if (remainingSameLang.isNotEmpty()) {
+            preferenceHelper.setActiveVoiceFolder(currentLang, remainingSameLang.first().folder)
+        } else {
+            val all = langDB.allInstalledLanguages
+            if (all.isEmpty()) preferenceHelper.setCurrentLanguage("")
+            else preferenceHelper.setCurrentLanguage(all.first().lang)
         }
         restart()
     }

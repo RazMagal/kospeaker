@@ -48,7 +48,11 @@ public class Downloader {
         String tokensUrl = "https://huggingface.co/csukuangfj/" + type + "-" + model + "/resolve/main/tokens.txt";
         String voicesUrl = "https://huggingface.co/csukuangfj/" + type + "-" + model + "/resolve/main/" + voices;
 
-        File directory = new File(activity.getExternalFilesDir(null)+ "/" + lang + country + "/");
+        // Each voice gets its own directory keyed by the unique model id, so a second
+        // voice for an already-installed language no longer overwrites the first.
+        final String folder = model;
+
+        File directory = new File(activity.getExternalFilesDir(null)+ "/" + folder + "/");
         if (!directory.exists() && !directory.mkdirs()) {
             Log.e("TTS Engine", "Failed to make directory: " + directory);
             return;
@@ -56,7 +60,7 @@ public class Downloader {
 
         activity.runOnUiThread(() -> binding.downloadSize.setVisibility(View.VISIBLE));
 
-        File onnxModelFile = new File(activity.getExternalFilesDir(null)+ "/" + lang + country + "/" + onnxModel);
+        File onnxModelFile = new File(activity.getExternalFilesDir(null)+ "/" + folder + "/" + onnxModel);
         if (onnxModelFile.exists()) onnxModelFile.delete();
         if (!onnxModelFile.exists()) {
             onnxModelFinished = false;
@@ -77,7 +81,7 @@ public class Downloader {
                     InputStream is = ucon.getInputStream();
                     BufferedInputStream inStream = new BufferedInputStream(is, 1024 * 5);
 
-                    File tempOnnxFile = new File(activity.getExternalFilesDir(null)+ "/" + lang + country + "/" + "model.tmp");
+                    File tempOnnxFile = new File(activity.getExternalFilesDir(null)+ "/" + folder + "/" + "model.tmp");
                     if (tempOnnxFile.exists()) tempOnnxFile.delete();
 
                     FileOutputStream outStream = new FileOutputStream(tempOnnxFile);
@@ -106,8 +110,9 @@ public class Downloader {
                             binding.buttonStart.setVisibility(View.VISIBLE);
                             PreferenceHelper preferenceHelper = new PreferenceHelper(activity);
                             preferenceHelper.setCurrentLanguage(lang);
+                            preferenceHelper.setActiveVoiceFolder(lang, folder);
                             LangDB langDB = LangDB.getInstance(activity);
-                            langDB.addLanguage(model, lang, country, 0, 1.0f, 1.0f, type);
+                            langDB.addLanguage(model, lang, country, 0, 1.0f, 1.0f, type, folder);
                         }
                     });
                 } catch (IOException i) {
@@ -119,7 +124,7 @@ public class Downloader {
             thread.start();
         }
 
-        File tokensFile = new File(activity.getExternalFilesDir(null) + "/" + lang + country + "/" + tokens);
+        File tokensFile = new File(activity.getExternalFilesDir(null) + "/" + folder + "/" + tokens);
         if (tokensFile.exists()) tokensFile.delete();
         if (!tokensFile.exists()) {
             tokensFinished = false;
@@ -137,7 +142,7 @@ public class Downloader {
                     InputStream is = ucon.getInputStream();
                     BufferedInputStream inStream = new BufferedInputStream(is, 1024 * 5);
 
-                    File tempTokensFile = new File(activity.getExternalFilesDir(null)+ "/" + lang + country + "/" + "tokens.tmp");
+                    File tempTokensFile = new File(activity.getExternalFilesDir(null)+ "/" + folder + "/" + "tokens.tmp");
                     if (tempTokensFile.exists()) tempTokensFile.delete();
 
                     FileOutputStream outStream = new FileOutputStream(tempTokensFile);
@@ -166,8 +171,9 @@ public class Downloader {
                             binding.buttonStart.setVisibility(View.VISIBLE);
                             PreferenceHelper preferenceHelper = new PreferenceHelper(activity);
                             preferenceHelper.setCurrentLanguage(lang);
+                            preferenceHelper.setActiveVoiceFolder(lang, folder);
                             LangDB langDB = LangDB.getInstance(activity);
-                            langDB.addLanguage(model, lang, country, 0, 1.0f, 1.0f, type);
+                            langDB.addLanguage(model, lang, country, 0, 1.0f, 1.0f, type, folder);
                         }
                     });
 
@@ -182,7 +188,7 @@ public class Downloader {
 
         // Kokoro-only: download voices.bin (mirrors the tokens download above).
         if (isKokoro) {
-            File voicesFileHandle = new File(activity.getExternalFilesDir(null) + "/" + lang + country + "/" + voices);
+            File voicesFileHandle = new File(activity.getExternalFilesDir(null) + "/" + folder + "/" + voices);
             if (voicesFileHandle.exists()) voicesFileHandle.delete();
             if (!voicesFileHandle.exists()) {
                 voicesFinished = false;
@@ -200,7 +206,7 @@ public class Downloader {
                         InputStream is = ucon.getInputStream();
                         BufferedInputStream inStream = new BufferedInputStream(is, 1024 * 5);
 
-                        File tempVoicesFile = new File(activity.getExternalFilesDir(null) + "/" + lang + country + "/" + "voices.tmp");
+                        File tempVoicesFile = new File(activity.getExternalFilesDir(null) + "/" + folder + "/" + "voices.tmp");
                         if (tempVoicesFile.exists()) tempVoicesFile.delete();
 
                         FileOutputStream outStream = new FileOutputStream(tempVoicesFile);
@@ -229,8 +235,9 @@ public class Downloader {
                                 binding.buttonStart.setVisibility(View.VISIBLE);
                                 PreferenceHelper preferenceHelper = new PreferenceHelper(activity);
                                 preferenceHelper.setCurrentLanguage(lang);
+                                preferenceHelper.setActiveVoiceFolder(lang, folder);
                                 LangDB langDB = LangDB.getInstance(activity);
-                                langDB.addLanguage(model, lang, country, 0, 1.0f, 1.0f, type);
+                                langDB.addLanguage(model, lang, country, 0, 1.0f, 1.0f, type, folder);
                             }
                         });
 

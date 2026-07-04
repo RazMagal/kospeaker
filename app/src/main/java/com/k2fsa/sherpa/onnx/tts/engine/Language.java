@@ -9,6 +9,10 @@ public class Language {
     private float speed;
     private float volume;
     private String type;
+    // Sub-directory (under getExternalFilesDir) that holds this voice's model files.
+    // Unique per voice so several voices can share one language code without their
+    // files colliding. Legacy rows backfill to lang+country (see LangDB migration).
+    private String folder;
 
     public Language() {}
 
@@ -51,4 +55,8 @@ public class Language {
     public void setVolume(float volume) {this.volume = volume;}
 
     public float getVolume() {return this.volume;}
+
+    public void setFolder(String folder) {this.folder = folder;}
+
+    public String getFolder() {return folder;}
 }

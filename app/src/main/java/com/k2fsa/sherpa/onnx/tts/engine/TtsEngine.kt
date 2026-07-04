@@ -26,6 +26,10 @@ object TtsEngine {
     var lang: String? = ""
     var country: String? = ""
 
+    // Model sub-directory of the voice currently loaded. Unique per voice, so it is the
+    // real cache key (several voices can share [lang]). Set by loadLanguageSettings().
+    var folder: String = ""
+
     var volume: MutableState<Float> = mutableFloatStateOf(1.0F)
     var speed: MutableState<Float> = mutableFloatStateOf(1.0F)
     var speakerId: MutableState<Int> = mutableIntStateOf(0)
@@ -51,7 +55,9 @@ object TtsEngine {
         val db = LangDB.getInstance(context)
         val allLanguages = db.allInstalledLanguages
         for (language in allLanguages) {
-            langCodes.add(language.lang)
+            // Several voices can now share a language code; expose each code once so the
+            // CHECK_TTS_DATA / available-languages list has no duplicates.
+            if (!langCodes.contains(language.lang)) langCodes.add(language.lang)
         }
         return langCodes
     }
@@ -60,25 +66,42 @@ object TtsEngine {
         return Jsoup.parse(text).text().trim()
     }
 
+    // The installed voice that should be active for [language]: the one the user pinned
+    // via the active-voice preference, else the first row for that language. Returns null
+    // only when no voice is installed for the language.
+    private fun activeVoiceRow(context: Context, language: String): Language? {
+        val rows = LangDB.getInstance(context).allInstalledLanguages.filter { it.lang == language }
+        if (rows.isEmpty()) return null
+        val active = PreferenceHelper(context).getActiveVoiceFolder(language)
+        return rows.firstOrNull { it.folder == active } ?: rows.first()
+    }
+
     @JvmStatic
     fun createTts(context: Context, language: String) {
-        // A phonikud engine keeps [tts] null, so guard it explicitly to avoid reloading the
-        // large ONNX models on every synthesis request.
-        if (phonikud != null && lang == language) {
-            Log.i(TAG, "Phonikud already loaded: $language")
+        val row = activeVoiceRow(context, language)
+        if (row == null) {
+            Log.e(TAG, "createTts: no installed voice for language $language")
             return
         }
-        if (tts == null || lang != language) {
-            if (ttsCache.containsKey(language)) {
-                Log.i(TAG, "From TTS cache: " + language)
-                clearPhonikud() // switched away from a phonikud model to a cached sherpa one
-                tts = ttsCache[language]
-                loadLanguageSettings(context, language)
-            } else {
-                initTts(context, language)
-            }
+        val targetFolder = row.folder
+        // Both engines are keyed by [folder], not [language], so switching to another
+        // voice of the SAME language still reloads. A phonikud engine keeps [tts] null,
+        // so guard it explicitly to avoid reloading the large ONNX models every request.
+        if (phonikud != null && folder == targetFolder) {
+            Log.i(TAG, "Phonikud already loaded: $targetFolder")
+            return
+        }
+        if (tts != null && folder == targetFolder) {
+            Log.i(TAG, "Already loaded: $targetFolder")
+            return
+        }
+        if (ttsCache.containsKey(targetFolder)) {
+            Log.i(TAG, "From TTS cache: $targetFolder")
+            clearPhonikud() // switched away from a phonikud model to a cached sherpa one
+            tts = ttsCache[targetFolder]
+            loadLanguageSettings(context, language)
         } else {
-            Log.i(TAG, "Already loaded: " + language)
+            initTts(context, language)
         }
     }
 
@@ -87,21 +110,35 @@ object TtsEngine {
         phonikud = null
     }
 
+    // Fully release whatever voice is currently loaded and forget which one it was.
+    // Needed when a voice is deleted: a phonikud engine lives in [phonikud] (not in
+    // [ttsCache], and [tts] is null in phonikud mode), so evicting the cache alone would
+    // leak the native engine and leave [folder] stale. Safe to call for sherpa voices too.
+    fun clearLoaded() {
+        clearPhonikud()
+        tts = null
+        folder = ""
+    }
+
     private fun loadLanguageSettings(context: Context, language: String) {
-        val db = LangDB.getInstance(context)
-        val currentLanguage = db.allInstalledLanguages.first { it.lang == language }
+        val currentLanguage = activeVoiceRow(context, language) ?: return
         this.lang = language
         this.country = currentLanguage.country
+        this.folder = currentLanguage.folder
         this.speed.value = currentLanguage.speed
         this.speakerId.value = currentLanguage.sid
         this.volume.value = currentLanguage.volume
         this.modelType = currentLanguage.type
-        PreferenceHelper(context).setCurrentLanguage(language)
+        val pref = PreferenceHelper(context)
+        pref.setCurrentLanguage(language)
+        // Pin the resolved voice so the choice is stable across restarts even if it
+        // was chosen only by the "first row" fallback above.
+        pref.setActiveVoiceFolder(language, currentLanguage.folder)
     }
 
-    fun removeLanguageFromCache(language: String) {
-        ttsCache.remove(language)
-        Log.i(TAG, "Removed TTS cache for: $language")
+    fun removeVoiceFromCache(folder: String) {
+        ttsCache.remove(folder)
+        Log.i(TAG, "Removed TTS cache for: $folder")
         Log.i(TAG, "TTS cache size:"+ ttsCache.size)
     }
 
@@ -112,7 +149,8 @@ object TtsEngine {
 
         val externalFilesDir = context.getExternalFilesDir(null)!!.absolutePath
 
-        val modelDir = "$externalFilesDir/$lang$country"
+        // [folder] was resolved by loadLanguageSettings() above; it is unique per voice.
+        val modelDir = "$externalFilesDir/$folder"
 
         // Premium offline Hebrew (phonikud): run two onnxruntime-android models instead of the
         // sherpa OfflineTts. Model dir must hold phonikud.onnx, tokenizer.json and shaul.onnx.
@@ -182,7 +220,7 @@ object TtsEngine {
         )
 
         tts = OfflineTts(assetManager = null, config = configDebugOff)
-        ttsCache[lang] = tts!!
+        ttsCache[folder] = tts!!
         Log.i(TAG, "TTS cache size:"+ ttsCache.size)
     }
 

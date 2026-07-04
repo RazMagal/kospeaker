@@ -39,8 +39,10 @@ class ManageLanguagesActivity  : AppCompatActivity() {
     private var coquiAdapter: VoiceAdapter? = null
     private var kokoroAdapter: VoiceAdapter? = null
 
-    // ISO-639-3 codes of already-installed languages (from LangDB.Language.lang).
-    private var installedLangCodes: Set<String> = emptySet()
+    // Model folders of already-installed voices (from LangDB.Language.folder). A voice
+    // is keyed by its unique folder (= downloadable model id), so several voices can
+    // share one language and each is marked/blocked independently.
+    private var installedFolders: Set<String> = emptySet()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,14 +53,12 @@ class ManageLanguagesActivity  : AppCompatActivity() {
         val allCoquiModels: Array<String> = resources.getStringArray(R.array.coqui_models)
         val allKokoroModels: Array<String> = resources.getStringArray(R.array.kokoro_models)
 
-        // Installed languages are tracked by ISO-639-3 code in LangDB (Language.lang).
-        // The app allows only one model per language, so instead of hiding installed
-        // languages we now show ALL voices, mark those whose language is already
-        // installed (best-effort match by derived language code) and block
-        // re-downloading them. This gives the installed-marker and the
-        // "show installed only" toggle something to display.
+        // Voices are tracked by their unique model folder (Language.folder), which for
+        // downloadable voices equals the model id shown in these lists. We show ALL
+        // voices, mark the ones already installed and block re-downloading just those,
+        // while still allowing a different voice of the same language to be added.
         val db = LangDB.getInstance(this)
-        installedLangCodes = db.allInstalledLanguages.mapNotNull { it.lang }.toHashSet()
+        installedFolders = db.allInstalledLanguages.mapNotNull { it.folder }.toHashSet()
 
         // Sort alphabetically (case-insensitive) by the displayed model id for scannability.
         val piperSorted = allPiperModels.sortedWith(String.CASE_INSENSITIVE_ORDER)
@@ -178,12 +178,11 @@ class ManageLanguagesActivity  : AppCompatActivity() {
         return try { if (code2.isEmpty()) "" else Locale(code2).isO3Language } catch (e: Exception) { "" }
     }
 
-    // Best-effort: a voice is "installed" if its derived ISO-639-3 language code is
-    // already present in LangDB. Because installs are tracked per language (one model
-    // per language), every voice sharing that language is marked/blocked.
+    // A voice is "installed" when a DB row already uses its folder. Downloaded voices
+    // store folder == model id, so this marks/blocks exactly that one voice and leaves
+    // the other voices of the same language downloadable.
     private fun isInstalled(model: String, type: String): Boolean {
-        val iso3 = iso3Of(code2Of(model, type))
-        return iso3.isNotEmpty() && installedLangCodes.contains(iso3)
+        return installedFolders.contains(model)
     }
 
     // Text used for filtering: model id + display language name + 2-letter + ISO-639-3 codes.
@@ -281,12 +280,8 @@ class ManageLanguagesActivity  : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            // Check duplicates
-            val db = LangDB.getInstance(this)
-            if (db.allInstalledLanguages.any { it.lang == langCode }) {
-                Toast.makeText(this, R.string.language_already_installed, Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
+            // Several voices may share a language now, so per-voice de-duplication is
+            // handled in the install helpers (by unique folder), not by language code.
 
             // Model architecture chosen by the user (defaults to Piper).
             // MMS models (facebook/mms-tts-*) must be stored as "vits-mms" so
@@ -335,14 +330,20 @@ class ManageLanguagesActivity  : AppCompatActivity() {
      * folder via ADB or a file manager. See docs/HEBREW.md.
      */
     private fun installPhonikudModel(langCode: String) {
+        // Phonikud's ~370MB files are pushed by hand into files/<langCode>/, so the
+        // folder is fixed to the language code. Block only an exact re-install.
+        val db = LangDB.getInstance(this)
+        if (db.allInstalledLanguages.any { it.folder == langCode }) {
+            Toast.makeText(this, R.string.language_already_installed, Toast.LENGTH_SHORT).show()
+            return
+        }
         val directory = File(this.getExternalFilesDir(null), "/$langCode/")
         if (!directory.exists() && !directory.mkdirs()) {
             Toast.makeText(this, R.string.error_copying_files, Toast.LENGTH_SHORT).show()
             return
         }
 
-        val db = LangDB.getInstance(this)
-        db.addLanguage(modelName, langCode, "", 0, 1.0f, 1.0f, "phonikud")
+        db.addLanguage(modelName, langCode, "", 0, 1.0f, 1.0f, "phonikud", langCode)
 
         Toast.makeText(
             this,
@@ -352,6 +353,7 @@ class ManageLanguagesActivity  : AppCompatActivity() {
 
         val preferenceHelper = PreferenceHelper(this)
         preferenceHelper.setCurrentLanguage(langCode)
+        preferenceHelper.setActiveVoiceFolder(langCode, langCode)
         modelFileUri = null
         tokensFileUri = null
         langCodeForInstallation = ""
@@ -361,14 +363,29 @@ class ManageLanguagesActivity  : AppCompatActivity() {
         finishAffinity()
     }
 
+    /**
+     * Filesystem-safe, collision-free folder name for a hand-installed voice, derived
+     * from "<langCode>-<modelName>" and suffixed if that folder is already taken so a
+     * second custom voice for the same language does not overwrite the first.
+     */
+    private fun uniqueFolder(langCode: String, name: String): String {
+        val base = "$langCode-$name".replace(Regex("[^A-Za-z0-9_-]"), "_").ifEmpty { langCode }
+        val existing = LangDB.getInstance(this).allInstalledLanguages.mapNotNull { it.folder }.toHashSet()
+        if (!existing.contains(base)) return base
+        var i = 2
+        while (existing.contains("${base}_$i")) i++
+        return "${base}_$i"
+    }
+
     private fun installCustomModel(langCode: String, modelUri: Uri, tokensUri: Uri, type: String) {
-        // Create directory for the language (country code is empty as requested)
-        val directory = File(this.getExternalFilesDir(null), "/$langCode/")
+        // Each voice gets its own unique folder (country code is empty as requested).
+        val folder = uniqueFolder(langCode, modelName)
+        val directory = File(this.getExternalFilesDir(null), "/$folder/")
         if (!directory.exists() && !directory.mkdirs()) {
             Toast.makeText(this, R.string.error_copying_files, Toast.LENGTH_SHORT).show()
             return
         }
-        
+
         // Copy model.onnx file
         val modelDest = File(directory, Downloader.onnxModel)
         try {
@@ -377,7 +394,7 @@ class ManageLanguagesActivity  : AppCompatActivity() {
             Toast.makeText(this, R.string.error_copying_files, Toast.LENGTH_SHORT).show()
             return
         }
-        
+
         // Copy tokens.txt file
         val tokensDest = File(directory, Downloader.tokens)
         try {
@@ -386,15 +403,16 @@ class ManageLanguagesActivity  : AppCompatActivity() {
             Toast.makeText(this, R.string.error_copying_files, Toast.LENGTH_SHORT).show()
             return
         }
-        
-        // Add to database with the chosen model type and empty country code
+
+        // Add to database with the chosen model type, empty country code and unique folder
         val db = LangDB.getInstance(this)
-        db.addLanguage(modelName, langCode, "", 0, 1.0f, 1.0f, type)
-        
+        db.addLanguage(modelName, langCode, "", 0, 1.0f, 1.0f, type, folder)
+
         // Show success message
         Toast.makeText(this, "+ \"$langCode\" = \"$modelName\" ", Toast.LENGTH_SHORT).show()
         val preferenceHelper = PreferenceHelper(this)
         preferenceHelper.setCurrentLanguage(langCode)
+        preferenceHelper.setActiveVoiceFolder(langCode, folder)
         // Reset file URIs and lang code for next use
         modelFileUri = null
         tokensFileUri = null
