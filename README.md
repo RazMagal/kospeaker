@@ -67,6 +67,10 @@ Full end-to-end guide: **[docs/HEBREW.md](docs/HEBREW.md)**.
 
 ## Install & build
 
+> **Just want it on your device?** See **[INSTALL.md](INSTALL.md)** for the short
+> install path, or **[docs/KOREADER_SETUP.md](docs/KOREADER_SETUP.md)** for the full
+> guide with troubleshooting. The rest of this section covers building from source.
+
 Requirements:
 
 - **JDK 17**

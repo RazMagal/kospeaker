@@ -14,7 +14,7 @@ The idea: KOReader has no speech of its own. Its Read Aloud plugin calls Android
 
 ## Step 1 — Build or sideload the KoSpeaker APK
 
-Option A — build from source (see the main [README](../README.md#build)):
+Option A — build from source (see the main [README](../README.md#install--build)):
 
 ```bash
 ./gradlew assembleDebug
@@ -24,15 +24,31 @@ The APK lands under `app/build/outputs/apk/debug/`. Copy it to the device and op
 
 Option B — download the debug APK from the project's CI build artifacts and sideload it the same way.
 
-## Step 2 — Download a Piper voice
+Option C — install over USB with ADB (fastest, and how the project is tested on-device):
+
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Enable **Developer options → USB debugging** on the Boox first and accept the authorization prompt. `adb install -r` also upgrades an existing install in place, preserving your downloaded voices.
+
+## Step 2 — Add a voice
 
 1. Open **KoSpeaker**.
-2. Go to **Manage Languages**.
-3. Pick a **Piper English** voice and let the app download it. Piper voices are small (~30 MB) and run comfortably in real time on Boox hardware.
+2. Tap **＋ (Add)** to open **Manage Languages**.
+3. Pick a **Piper English** voice and let the app download it. Prefer a *medium*-quality voice (e.g. `hfc_female`) for the best balance of naturalness and speed on Boox hardware — `low` voices are faster but flatter, and `high` voices are the most detailed but the slowest to synthesize on e-ink CPUs.
 
-This download is the **only** time KoSpeaker needs the network. After it finishes, everything works offline.
+Downloading is the **only** time KoSpeaker needs the network. After it finishes, everything works offline.
 
-> Tip: start with a single English voice to confirm the pipeline works, then add more later.
+### Multiple voices & switching
+
+KoSpeaker supports **several voices per language**, and you choose which one is active:
+
+- Every voice you download (or sideload) gets its own slot; the newest one becomes active automatically.
+- On the main screen, the **Language** dropdown picks the language and the **Voice** dropdown picks which installed voice speaks it.
+- The **🗑 (Delete)** button removes just the voice currently shown in the **Voice** dropdown — not the whole language.
+
+To sideload a voice's `model.onnx` + `tokens.txt` over USB, or for Hebrew, see **[HEBREW.md](HEBREW.md)** and **[TESTING_ON_BOOX.md](TESTING_ON_BOOX.md)**.
 
 ## Step 3 — Make KoSpeaker the default system TTS
 
