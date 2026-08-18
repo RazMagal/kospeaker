@@ -1,7 +1,7 @@
 # ADR 0002: Premium Hebrew TTS via phonikud
 
-- **Status:** Proposed
-- **Date:** 2026-07
+- **Status:** Accepted — implemented (experimental; on-device behavior not yet verified)
+- **Date:** 2026-07 (amended 2026-08)
 
 ## Context
 
@@ -86,6 +86,16 @@ we fully control; the cost is a small, contained tokeniser + PCM shim.
   **per chunk** (not whole utterance) so first-audio latency stays low and
   `onStop()` can still interrupt between chunks.
 
+> **Amendment (2026-08) — implementation drift.** The shipped implementation
+> reverses two of the points above:
+> 1. It diacritises the **whole utterance once**, then chunks the diacritized
+>    text and runs only the fast VITS voice per chunk — running the ~308 MB
+>    diacritizer per chunk starved AudioTrack and caused underruns.
+> 2. There is no `tokens.json` asset: the Piper phoneme→id map and inference
+>    scales are **hardcoded in `PiperTokenizer`** (from `model.config.json`),
+>    and the downloaded `tokenizer.json` is the DictaBERT char tokenizer for
+>    the diacritizer, not a Piper artifact.
+
 ## Dependencies & footprint
 
 - Add `com.microsoft.onnxruntime:onnxruntime-android` (the Java `OrtSession`
@@ -98,10 +108,14 @@ we fully control; the cost is a small, contained tokeniser + PCM shim.
 
 ## Licensing
 
-phonikud diacritizer is **MIT**; the Roboshaul/SASPEECH voices are
-**CC-BY-NC 4.0** (non-commercial). Fine for personal/open KoSpeaker. Models are
-downloaded/sideloaded, **not bundled**, so the GPLv3 app code is unaffected.
-Flag CC-BY-NC before any commercial distribution.
+**Open question — not yet confirmed against the model cards.** The phonikud
+*code* is MIT, but the released diacritizer weights are a fine-tune of
+`dicta-il/dictabert-large-char-menaked` and may inherit Dicta's model license;
+the Roboshaul/SASPEECH voices are reported **CC-BY-NC 4.0** (non-commercial).
+See [`HEBREW.md`](../HEBREW.md#license-1) for the per-artifact breakdown.
+Models are downloaded/sideloaded, **not bundled**, so the GPLv3 app code is
+unaffected either way — but verify the model terms before any redistribution,
+and treat the stack as non-commercial until confirmed.
 
 ## Risks / why deferred
 

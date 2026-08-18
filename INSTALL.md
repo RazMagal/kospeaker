@@ -22,6 +22,11 @@ KOReader at it.
 - **Or** copy the APK to the device and open it (allow "install from unknown
   sources" for your file manager).
 
+> **Already have SherpaTTS installed?** KoSpeaker keeps upstream's package name
+> (`org.woheller69.ttsengine`), so the install fails with
+> `INSTALL_FAILED_UPDATE_INCOMPATIBLE` if SherpaTTS is present with a different
+> signing key. Uninstall SherpaTTS first — the two cannot coexist.
+
 ## 3. Add a voice
 
 Open **KoSpeaker → ＋ Add → Manage Languages** and download a **Piper English**

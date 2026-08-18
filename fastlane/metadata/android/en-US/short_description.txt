@@ -1,1 +1,1 @@
-Text-to-Speech engine based on Next-gen Kaldi
+Offline neural Text-to-Speech engine for KOReader Read Aloud on e-ink devices

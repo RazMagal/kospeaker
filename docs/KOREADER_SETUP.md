@@ -82,6 +82,11 @@ Turn **off page-turn animations** in KOReader (and in the Boox system reader if 
 
 ## Troubleshooting
 
+**The install fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` (or "App not installed").**
+KoSpeaker keeps upstream SherpaTTS's package name (`org.woheller69.ttsengine`),
+so it cannot be installed alongside or over a SherpaTTS build signed with a
+different key. Uninstall SherpaTTS first, then install KoSpeaker.
+
 **KoSpeaker doesn't appear in the TTS engine list.**
 Confirm the app installed and opened at least once. Some Boox firmware caches the engine list — reboot the device and check the TTS output settings again.
 

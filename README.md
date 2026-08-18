@@ -30,13 +30,16 @@ After you download (or sideload) a voice once, no further network access is need
 
 ## Features
 
-### Voices (on-device, via sherpa-onnx v1.13.0)
+### Voices (on-device)
+
+Piper, Kokoro and MMS run via sherpa-onnx v1.13.0; phonikud runs via onnxruntime-android.
 
 | Engine | Role | Size | Notes |
 | --- | --- | --- | --- |
 | **Piper** (VITS→ONNX) | **Default** | ~30 MB | Fast and comfortably real-time on weak ARM CPUs — the right default for e-ink. Installed from the in-app voice downloader. |
 | **Kokoro-82M** | Optional high-quality mode | ~80 MB | Richer prosody for users who prioritize voice quality over speed. Selectable per model type; not forced on low-end hardware. |
 | **Meta MMS-heb** | Offline **Hebrew** | ~145 MB | Self-contained VITS with a raw-character frontend (no espeak / niqqud / lexicon). Sideloaded via a one-shot converter — see [Hebrew](#hebrew). |
+| **phonikud + Roboshaul** | **Experimental** premium Hebrew | ~372 MB | Two-stage niqqud-diacritizer → IPA → 22 kHz VITS pipeline, sideloaded. Implemented and unit-tested, but **not yet verified on a device** — see [docs/HEBREW.md](docs/HEBREW.md#premium-hebrew-phonikud). |
 
 ### Reading pipeline (original work — pure Kotlin, unit-tested)
 
@@ -61,7 +64,7 @@ Offline Hebrew is a standout feature. KoSpeaker reads Hebrew EPUBs aloud fully o
 
 The reading pipeline is Hebrew-aware (script detection, Hebrew punctuation, and the number spelling-out described above), which is what keeps digits and years from being silently dropped by a voice whose vocabulary has none.
 
-**Quality expectation:** MMS is 16 kHz — intelligible but flat, and because everyday Hebrew is written without niqqud it will make occasional homograph errors. It is genuinely usable for reading today; a markedly more natural route (phonikud → 22 kHz Roboshaul) is on the [roadmap](#roadmap).
+**Quality expectation:** MMS is 16 kHz — intelligible but flat, and because everyday Hebrew is written without niqqud it will make occasional homograph errors. It is genuinely usable for reading today. A markedly more natural route (phonikud → 22 kHz Roboshaul) is implemented as an experimental sideloaded engine, but its on-device behavior is **not yet verified** — see [docs/HEBREW.md](docs/HEBREW.md#premium-hebrew-phonikud).
 
 Full end-to-end guide: **[docs/HEBREW.md](docs/HEBREW.md)**.
 
@@ -100,19 +103,19 @@ Full, step-by-step instructions live in **[docs/KOREADER_SETUP.md](docs/KOREADER
 ## Architecture
 
 - The reasoning behind forking SherpaTTS and the Piper-default / Kokoro-optional split is captured in [ADR 0001 — Architecture and base engine choice](docs/adr/0001-architecture.md).
-- The planned premium-Hebrew path (on-device niqqud diacritizer → IPA → 22 kHz Roboshaul VITS) is captured in [ADR 0002 — Premium Hebrew TTS via phonikud](docs/adr/0002-phonikud-hebrew-tts.md).
+- The premium-Hebrew path (on-device niqqud diacritizer → IPA → 22 kHz Roboshaul VITS) is captured in [ADR 0002 — Premium Hebrew TTS via phonikud](docs/adr/0002-phonikud-hebrew-tts.md). It is implemented as the experimental `phonikud` model type; on-device behavior is not yet verified.
 
 The base fork provides the proven pieces — system-TTS-engine registration, model management, and the built-in Piper voice downloader on top of **sherpa-onnx**. KoSpeaker's *original* value sits as a distinct, reviewable layer: the pure-Kotlin **`reading/`** package (normalization, chunking, script detection, number verbalization), the offline Hebrew support, and the KOReader onboarding screen.
 
 ### Quality & engineering
 
-- **70 unit tests** (JUnit) covering the reading pipeline.
-- **GitHub Actions CI** — runs the tests (must-pass gate), lint, and `assembleDebug`, and uploads the debug APK as an artifact. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+- **130 unit tests** (JUnit) covering the reading pipeline (72) and the pure-Kotlin phonikud Hebrew core (58).
+- **GitHub Actions CI** — runs the tests (must-pass gate) and `assembleDebug`, and uploads the debug APK as an artifact. (Lint is deliberately not run: AGP's partial-analysis lint crashes on a known Compose detector bug.) See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 - Builds locally with the Android SDK; the neural runtime is a Gradle dependency (no manual NDK setup).
 
 ## Roadmap
 
-Milestones — the Kokoro high-quality mode, premium Hebrew via **phonikud**, an e-ink-friendly UI, per-book voice/speed presets, and signed CI release APKs — are tracked in **[ROADMAP.md](ROADMAP.md)**. The iterative, LLM-driven development methodology behind the project is described in **[LOOP.md](LOOP.md)**.
+Milestones — the Kokoro high-quality mode, premium Hebrew via **phonikud** (implemented, on-device unverified), an e-ink-friendly UI, per-book voice/speed presets, and signed CI release APKs — are tracked in **[ROADMAP.md](ROADMAP.md)**. The iterative, LLM-driven development methodology behind the project is described in **[LOOP.md](LOOP.md)**.
 
 ## Credits & License
 
@@ -120,10 +123,11 @@ KoSpeaker is a fork of **[woheller69/ttsEngine](https://github.com/woheller69/tt
 
 It stands on:
 
-- **[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)** (k2-fsa) — Apache-2.0 — neural TTS runtime.
+- **[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)** (k2-fsa) — Apache-2.0 — neural TTS runtime; the app source also derives from its Android `tts-engine` example (via the SherpaTTS fork).
+- **[ONNX Runtime](https://github.com/microsoft/onnxruntime)** (`onnxruntime-android`) — MIT — bundled runtime for the phonikud Hebrew path.
 - **[eSpeak NG](https://github.com/espeak-ng/espeak-ng)** — GPLv3 — phonemization data.
 - **[jsoup](https://github.com/jhy/jsoup)** — MIT — HTML/text handling.
 
-**Voice models** — [Piper](https://github.com/rhasspy/piper), [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M), [MMS-heb](https://huggingface.co/facebook/mms-tts-heb), and (planned) phonikud/Roboshaul — carry **their own licenses** (MMS is **CC-BY-NC 4.0**, non-commercial). They are **downloaded or sideloaded, not bundled** with the app.
+**Voice models** — [Piper](https://github.com/rhasspy/piper), [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M), [MMS-heb](https://huggingface.co/facebook/mms-tts-heb), and phonikud/Roboshaul — carry **their own licenses** (MMS is **CC-BY-NC 4.0**, non-commercial; the phonikud/Roboshaul model licensing has **not been confirmed** against the model cards — see [docs/HEBREW.md](docs/HEBREW.md#license-1)). They are **downloaded or sideloaded, not bundled** with the app.
 
 KoSpeaker itself is licensed under **GPLv3** (inherited from the upstream fork). See [LICENSE](LICENSE) and [NOTICE](NOTICE) for full attribution.

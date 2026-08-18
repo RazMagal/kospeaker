@@ -160,5 +160,18 @@ The engine loads them lazily on the first synthesis request for that language.
 
 ### License
 
-Both models are **CC-BY-NC** (non-commercial). Using them for your own offline
-reading is fine; **do not redistribute them commercially**.
+**Not yet confirmed — verify against the model cards before redistributing.**
+The three artifacts have different provenance, and this repo has not pinned
+down their exact license terms:
+
+- `phonikud.onnx` — released by the (MIT-licensed) phonikud project, but the
+  weights are a fine-tune of `dicta-il/dictabert-large-char-menaked`, so they
+  may inherit Dicta's model license rather than the code's MIT license.
+- `tokenizer.json` — comes from `dicta-il/dictabert-large-char-menaked`;
+  its license is whatever that model card states.
+- `shaul.onnx` — a Roboshaul/SASPEECH-derived voice, reported upstream as
+  **CC-BY-NC 4.0** (non-commercial).
+
+Until this is resolved, the safe assumption is **non-commercial, personal
+use only**: using the models for your own offline reading is fine; do not
+redistribute them, commercially or otherwise.

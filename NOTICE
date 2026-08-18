@@ -18,31 +18,62 @@ KoSpeaker is a fork of:
   https://github.com/woheller69/ttsEngine
   GPLv3, Copyright (C) woheller69
 
-The GPLv3 license is inherited from this upstream project.
+The GPLv3 license is inherited from this upstream project. SherpaTTS itself
+derives from the sherpa-onnx Android "tts-engine" example application
+(k2-fsa/sherpa-onnx, Apache License 2.0); substantial application source in
+this repository originates there.
 
 Third-party components
 ----------------------
-This software incorporates or depends on the following:
+Libraries compiled into or bundled with the APK:
 
   sherpa-onnx (k2-fsa) — neural TTS runtime
   https://github.com/k2-fsa/sherpa-onnx
   Apache License 2.0
 
-  Piper voices — default neural voice models (VITS -> ONNX)
-  https://github.com/rhasspy/piper
-  Apache-2.0 class
+  ONNX Runtime (onnxruntime-android) — ML inference runtime for the
+  phonikud Hebrew path (Java API + native library)
+  https://github.com/microsoft/onnxruntime
+  MIT License, Copyright (c) Microsoft Corporation
 
-  Kokoro-82M — optional high-quality neural voice model (planned)
-  https://huggingface.co/hexgrad/Kokoro-82M
-  Apache-2.0 class
-
-  eSpeak NG — phonemization data
+  eSpeak NG — phonemization data (bundled in app assets)
   https://github.com/espeak-ng/espeak-ng
   GPLv3
 
   jsoup — HTML/text handling
   https://github.com/jhy/jsoup
   MIT License
+
+  FreeDroidWarn (woheller69)
+  https://github.com/woheller69/FreeDroidWarn
+  See the project page for its license terms.
+
+Voice models — downloaded or sideloaded by the user, NOT bundled with the
+app. Each model carries its own license:
+
+  Piper voices — default neural voice models (VITS -> ONNX)
+  https://github.com/rhasspy/piper
+  Per-voice dataset licenses (vary by voice; check each voice's model card)
+
+  Kokoro-82M — optional high-quality neural voice model
+  https://huggingface.co/hexgrad/Kokoro-82M
+  Apache License 2.0
+
+  Coqui TTS voices — optional downloadable voice models
+  https://github.com/coqui-ai/TTS
+  Per-model licenses (check each model's card)
+
+  Meta MMS voices (e.g. facebook/mms-tts-heb) — offline Hebrew
+  https://huggingface.co/facebook/mms-tts-heb
+  CC-BY-NC 4.0 (non-commercial)
+
+  phonikud diacritizer, DictaBERT tokenizer, and Roboshaul voice —
+  experimental premium Hebrew
+  https://github.com/thewh1teagle/phonikud
+  License NOT yet confirmed against the model cards (the phonikud code is
+  MIT, but the model weights build on dicta-il/dictabert-large-char-menaked
+  and the Roboshaul/SASPEECH voice is reported CC-BY-NC 4.0). Verify before
+  any redistribution; see docs/HEBREW.md.
 
 Each component remains under its own license. Their inclusion does not alter
 the licensing of the components themselves; the combined work is distributed
