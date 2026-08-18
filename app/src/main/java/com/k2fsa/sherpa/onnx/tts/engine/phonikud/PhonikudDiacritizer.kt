@@ -31,9 +31,11 @@ class PhonikudDiacritizer(modelDir: String) : AutoCloseable {
     private val session: OrtSession
     private val vocab: Map<String, Int>
 
-    // Existing niqqud / cantillation / Hebrew marks + prefix bar to remove before re-diacritizing.
-    // U+0590..U+05C7 covers all niqqud & cantillation but NOT the letters (U+05D0..U+05EA).
-    private val niqqudRegex = Regex("[֐-ׇ|]")
+    // Existing niqqud / cantillation marks + prefix bar to remove before re-diacritizing:
+    // U+0591..U+05BD, U+05BF, U+05C1..U+05C2, U+05C4..U+05C5, U+05C7. Deliberately keeps the
+    // Hebrew PUNCTUATION code points in that block — maqaf U+05BE, paseq U+05C0, sof pasuq
+    // U+05C3, nun hafukha U+05C6 — so hyphenated words are not silently merged.
+    private val niqqudRegex = Regex("[\\u0591-\\u05BD\\u05BF\\u05C1\\u05C2\\u05C4\\u05C5\\u05C7|]")
 
     init {
         val modelPath = File(modelDir, "phonikud.onnx").absolutePath
