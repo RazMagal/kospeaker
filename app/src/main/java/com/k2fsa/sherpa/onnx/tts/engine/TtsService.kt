@@ -80,10 +80,22 @@ class TtsService : TextToSpeechService() {
 
     override fun onSynthesizeText(request: SynthesisRequest?, callback: SynthesisCallback?) {
         Log.i(TAG, "onSynthesizeText")
-        // Either the sherpa engine OR the phonikud engine must be available.
-        if ((TtsEngine.tts == null && TtsEngine.phonikud == null) || request == null || callback == null) {
+        // Accept a Stop that arrives before this utterance only from here on; reset
+        // BEFORE any callback interaction so a stop between start() and the chunk
+        // loop is never silently discarded.
+        stopRequested = false
+        if (callback == null) return
+        if (request == null) {
+            // Never return without signalling: a client waiting for onDone/onError
+            // (KOReader's Read Aloud does) would hang forever otherwise. start() must
+            // precede error() — the framework only dispatches onError to the client
+            // once the callback has started; a bare error() just records the status.
+            failUtterance(callback)
             return
         }
+        // NOTE: no early "engine == null" return here — createTts() below is the only
+        // code that (re)loads an engine, so bailing out first would leave the service
+        // permanently mute after clearLoaded() (e.g. voice deletion).
         val language = request.language
         val country = request.country
         val variant = request.variant
@@ -91,7 +103,7 @@ class TtsService : TextToSpeechService() {
 
         val ret = onIsLanguageAvailable(language, country, variant)
         if (ret == TextToSpeech.LANG_NOT_SUPPORTED) {
-            callback.error()
+            failUtterance(callback)
             return
         } else {
             TtsEngine.createTts(application, language)
@@ -125,7 +137,7 @@ class TtsService : TextToSpeechService() {
 
         // createTts may have attempted a phonikud model that failed to load, leaving tts null.
         if (TtsEngine.tts == null) {
-            callback.error()
+            failUtterance(callback)
             return
         }
 
@@ -141,7 +153,6 @@ class TtsService : TextToSpeechService() {
         // Store state in member variables so the function reference can access them
         currentPitch = pitch
         currentSynthesisCallback = callback
-        stopRequested = false
 
         // Split the utterance into sentence-sized chunks and synthesize them in
         // order. Streaming chunk-by-chunk lowers first-audio latency on weak e-ink
@@ -166,6 +177,17 @@ class TtsService : TextToSpeechService() {
     }
 
     /**
+     * Fail an utterance so the client actually hears about it: AOSP dispatches
+     * onError only after the callback has started (`hasStarted()`), so a bare
+     * error() would leave a client waiting on onDone/onError hanging. The sample
+     * rate is a placeholder — no audio is ever written on this path.
+     */
+    private fun failUtterance(callback: SynthesisCallback) {
+        callback.start(22050, AudioFormat.ENCODING_PCM_16BIT, 1)
+        callback.error()
+    }
+
+    /**
      * Synthesize [text] with the phonikud engine, streaming PCM16 @ 22050 Hz through [callback].
      * Chunks per the reading pipeline, honors the [stopRequested] flag between/within chunks,
      * applies the current volume, and reports failures via callback.error().
@@ -181,7 +203,6 @@ class TtsService : TextToSpeechService() {
             return
         }
 
-        stopRequested = false
         val volume = TtsEngine.volume.value
         val maxBufferSize = callback.maxBufferSize
 
@@ -263,7 +284,10 @@ class TtsService : TextToSpeechService() {
         // byteArray is actually a ShortArray
         val byteArray = ByteArray(audio.size * 2)
         for (i in audio.indices) {
-            val sample = (audio[i] * 32767).toInt()
+            // Clamp: the volume slider goes up to 5.0x, so scaled samples can exceed
+            // 16-bit range; without the clamp positive peaks wrap to large negatives
+            // (loud crackling) instead of clipping.
+            val sample = (audio[i] * 32767).toInt().coerceIn(-32768, 32767)
             byteArray[2 * i] = sample.toByte()
             byteArray[2 * i + 1] = (sample shr 8).toByte()
         }

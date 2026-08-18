@@ -138,13 +138,14 @@ class ManageLanguagesActivity  : AppCompatActivity() {
 
     /**
      * True when the filter query refers to Hebrew: the (lowercased) query is a
-     * substring of "hebrew" (covers "he"/"heb"/"hebr"...), or it involves the
-     * Hebrew word "עברית". Empty queries never match.
+     * prefix of "hebrew" of length >= 2 (covers "he"/"heb"/"hebr"... but not a
+     * stray mid-word letter like "e" or "b"), or it involves the Hebrew word
+     * "עברית". Empty queries never match.
      */
     private fun matchesHebrew(query: String): Boolean {
         val q = query.trim().lowercase(Locale.ROOT)
         if (q.isEmpty()) return false
-        return "hebrew".contains(q) || q.contains("עברית") || "עברית".contains(q)
+        return (q.length >= 2 && "hebrew".startsWith(q)) || q.contains("עברית") || "עברית".startsWith(q)
     }
 
     /** Hide the whole browse UI once a download starts (matches the pre-existing behaviour). */

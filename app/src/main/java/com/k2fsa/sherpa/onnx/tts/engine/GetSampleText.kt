@@ -193,10 +193,27 @@ fun getSampleText(lang: String): String {
 }
 
 class GetSampleText : Activity() {
+
+    // The sample table above is keyed by ISO-639-3 ("heb", "eng"), but Android's
+    // Settings passes 2-letter codes in the intent extra — and the LEGACY code for
+    // Hebrew ("iw"). Locale normalizes both ("iw" -> "heb", "en" -> "eng").
+    private fun iso3(code: String): String =
+        try { if (code.isEmpty()) "" else java.util.Locale(code).isO3Language } catch (e: Exception) { "" }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         var result = TextToSpeech.LANG_AVAILABLE
-        val text: String = getSampleText(TtsEngine.lang ?: "")
+        // This activity may start in a fresh process where TtsEngine.lang is still
+        // "" — try the intent's requested locale first, then the persisted language,
+        // then the engine; for each candidate try it verbatim and ISO-3-normalized.
+        val text: String = sequenceOf(
+            intent?.getStringExtra("language").orEmpty(),
+            PreferenceHelper(this).getCurrentLanguage().orEmpty(),
+            TtsEngine.lang.orEmpty(),
+        )
+            .flatMap { sequenceOf(it, iso3(it)) }
+            .map { getSampleText(it) }
+            .firstOrNull { it.isNotEmpty() } ?: ""
         if (text.isEmpty()) {
             result = TextToSpeech.LANG_NOT_SUPPORTED
         }

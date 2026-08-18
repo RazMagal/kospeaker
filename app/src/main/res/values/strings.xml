@@ -37,6 +37,7 @@
     <string name="language_already_installed">Language already installed</string>
     <string name="error_copying_files">Error copying files</string>
     <string name="preload_model">Preload model after boot</string>
+    <string name="voice_load_failed">Voice failed to load. Check the model files for this voice (for Phonikud: phonikud.onnx, tokenizer.json and shaul.onnx must be in the voice folder).</string>
 
     <!-- Manage Languages: filter / installed marker / toggle -->
     <string name="search_hint">Search language or code</string>

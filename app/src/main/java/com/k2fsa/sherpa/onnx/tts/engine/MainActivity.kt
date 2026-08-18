@@ -47,6 +47,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -60,6 +61,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -125,6 +127,9 @@ class MainActivity : ComponentActivity() {
                     withContext(Dispatchers.IO) {
                         TtsEngine.createTts(this@MainActivity, preferenceHelper.getCurrentLanguage()!!)
                     }
+                } catch (e: CancellationException) {
+                    // Preserve structured concurrency: the activity is going away.
+                    throw e
                 } catch (e: Exception) {
                     // Don't hang the UI on a failed load: log and fall through to
                     // clear the loading state below so Play re-enables.
@@ -133,8 +138,12 @@ class MainActivity : ComponentActivity() {
                     // Back on the main thread (lifecycleScope defaults to Main). Init
                     // the AudioTrack now that the engine's sample rate is known, then
                     // clear the loading flag to enable Play and refresh speaker info.
-                    initAudioTrack()
-                    modelLoading.value = false
+                    // Skip when the activity is already gone (Back during a slow load):
+                    // an AudioTrack created here would never be released by onDestroy.
+                    if (!isFinishing && !isDestroyed) {
+                        initAudioTrack()
+                        modelLoading.value = false
+                    }
                 }
             }
         } else {
@@ -469,7 +478,7 @@ class MainActivity : ComponentActivity() {
                                     Box(modifier = Modifier.fillMaxWidth()) {
                                         var expanded by remember { mutableStateOf(false) }
                                         val speakerList = (0 until numSpeakers).toList()
-                                        var selectedSpeaker by remember { mutableStateOf(TtsEngine.speakerId) }
+                                        var selectedSpeaker by remember { mutableIntStateOf(TtsEngine.speakerId.value) }
                                         val keyboardController =
                                             LocalSoftwareKeyboardController.current
 
@@ -506,7 +515,7 @@ class MainActivity : ComponentActivity() {
                                                     DropdownMenuItem(
                                                         text = { Text(speakerId.toString()) },
                                                         onClick = {
-                                                            selectedSpeaker.value = speakerId
+                                                            selectedSpeaker = speakerId
                                                             TtsEngine.speakerId.value = speakerId
                                                             langDB.updateVoiceSettings(
                                                                 TtsEngine.folder,
@@ -547,6 +556,10 @@ class MainActivity : ComponentActivity() {
                                     }
 
                                     Button(
+                                        // Disabled while the engine loads: deleteActiveVoice()
+                                        // takes the engine lock on the main thread, and during
+                                        // a slow (phonikud) load that would block into an ANR.
+                                        enabled = !loading,
                                         modifier = Modifier.padding(5.dp),
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = colorResource(R.color.primaryDark),
@@ -639,6 +652,15 @@ class MainActivity : ComponentActivity() {
                                                     getString(R.string.input),
                                                     Toast.LENGTH_SHORT
                                                 ).show()
+                                            } else if (TtsEngine.tts == null && TtsEngine.phonikud == null) {
+                                                // The async load finished but FAILED (e.g. phonikud
+                                                // model files not pushed yet): both engines are null
+                                                // and Play would otherwise crash on tts!!.
+                                                Toast.makeText(
+                                                    applicationContext,
+                                                    getString(R.string.voice_load_failed),
+                                                    Toast.LENGTH_LONG
+                                                ).show()
                                             } else {
                                                 stopped = false
 
@@ -680,7 +702,9 @@ class MainActivity : ComponentActivity() {
                                                             if (samples.isNotEmpty()) callback(samples)
                                                         }
                                                     } else {
-                                                        TtsEngine.tts!!.generateWithCallback(
+                                                        // Re-read instead of !!: the engine can be
+                                                        // cleared concurrently (voice deletion).
+                                                        TtsEngine.tts?.generateWithCallback(
                                                             text = sampleText,
                                                             sid = TtsEngine.speakerId.value,
                                                             speed = TtsEngine.speed.value,
@@ -745,10 +769,17 @@ class MainActivity : ComponentActivity() {
 
         // Guard against a blank folder, which would resolve to the whole files dir.
         if (victim.folder.isNotBlank()) {
-            val subdirectory = File(getExternalFilesDir(null), victim.folder)
-            if (subdirectory.exists() && subdirectory.isDirectory) {
-                subdirectory.listFiles()?.forEach { file -> if (file.isFile) file.delete() }
-                subdirectory.delete()
+            val root = getExternalFilesDir(null)!!.canonicalFile
+            val subdirectory = File(root, victim.folder)
+            // Recursive delete is only safe on a DIRECT child of the files dir: a
+            // hand-typed folder like "../x" must never escape it (the old per-file
+            // delete failed harmlessly there; deleteRecursively would not).
+            if (subdirectory.exists() && subdirectory.isDirectory &&
+                subdirectory.canonicalFile.parentFile == root
+            ) {
+                // Recursive: a nested dir (e.g. espeak data copied into a voice dir)
+                // would otherwise make delete() fail silently and orphan the folder.
+                subdirectory.deleteRecursively()
             }
         }
         langDB.removeByFolder(victim.folder)

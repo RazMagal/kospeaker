@@ -14,12 +14,20 @@ import java.io.FileOutputStream
 import java.io.IOException
 
 object TtsEngine {
-    private val ttsCache = mutableMapOf<String, OfflineTts>()
+    // Loaded/mutated from four threads (TTS synthesis thread, service main thread,
+    // WorkManager preload, MainActivity's IO coroutine) — hence the concurrent map
+    // and the shared [engineLock] guarding create/clear/remove below. One explicit
+    // lock object: @Synchronized would NOT work here because @JvmStatic methods
+    // synchronize on the class while plain ones synchronize on the instance.
+    private val engineLock = Any()
+    private val ttsCache = java.util.concurrent.ConcurrentHashMap<String, OfflineTts>()
+    @Volatile
     var tts: OfflineTts? = null
 
     // Premium offline Hebrew (phonikud). Non-null only while a "phonikud"-type model is loaded;
     // in that mode [tts] is null and TtsService routes synthesis through this engine instead.
     // ON-DEVICE UNVERIFIED (ONNX/audio path); see the phonikud subpackage.
+    @Volatile
     var phonikud: PhonikudEngine? = null
 
     // https://en.wikipedia.org/wiki/ISO_639-3
@@ -28,6 +36,7 @@ object TtsEngine {
 
     // Model sub-directory of the voice currently loaded. Unique per voice, so it is the
     // real cache key (several voices can share [lang]). Set by loadLanguageSettings().
+    @Volatile
     var folder: String = ""
 
     var volume: MutableState<Float> = mutableFloatStateOf(1.0F)
@@ -78,30 +87,32 @@ object TtsEngine {
 
     @JvmStatic
     fun createTts(context: Context, language: String) {
-        val row = activeVoiceRow(context, language)
-        if (row == null) {
-            Log.e(TAG, "createTts: no installed voice for language $language")
-            return
-        }
-        val targetFolder = row.folder
-        // Both engines are keyed by [folder], not [language], so switching to another
-        // voice of the SAME language still reloads. A phonikud engine keeps [tts] null,
-        // so guard it explicitly to avoid reloading the large ONNX models every request.
-        if (phonikud != null && folder == targetFolder) {
-            Log.i(TAG, "Phonikud already loaded: $targetFolder")
-            return
-        }
-        if (tts != null && folder == targetFolder) {
-            Log.i(TAG, "Already loaded: $targetFolder")
-            return
-        }
-        if (ttsCache.containsKey(targetFolder)) {
-            Log.i(TAG, "From TTS cache: $targetFolder")
-            clearPhonikud() // switched away from a phonikud model to a cached sherpa one
-            tts = ttsCache[targetFolder]
-            loadLanguageSettings(context, language)
-        } else {
-            initTts(context, language)
+        synchronized(engineLock) {
+            val row = activeVoiceRow(context, language)
+            if (row == null) {
+                Log.e(TAG, "createTts: no installed voice for language $language")
+                return
+            }
+            val targetFolder = row.folder
+            // Both engines are keyed by [folder], not [language], so switching to another
+            // voice of the SAME language still reloads. A phonikud engine keeps [tts] null,
+            // so guard it explicitly to avoid reloading the large ONNX models every request.
+            if (phonikud != null && folder == targetFolder) {
+                Log.i(TAG, "Phonikud already loaded: $targetFolder")
+                return
+            }
+            if (tts != null && folder == targetFolder) {
+                Log.i(TAG, "Already loaded: $targetFolder")
+                return
+            }
+            if (ttsCache.containsKey(targetFolder)) {
+                Log.i(TAG, "From TTS cache: $targetFolder")
+                clearPhonikud() // switched away from a phonikud model to a cached sherpa one
+                tts = ttsCache[targetFolder]
+                loadLanguageSettings(context, language)
+            } else {
+                initTts(context, language)
+            }
         }
     }
 
@@ -114,10 +125,16 @@ object TtsEngine {
     // Needed when a voice is deleted: a phonikud engine lives in [phonikud] (not in
     // [ttsCache], and [tts] is null in phonikud mode), so evicting the cache alone would
     // leak the native engine and leave [folder] stale. Safe to call for sherpa voices too.
+    //
+    // LIMITATION: a synthesis already in flight holds its own reference to the phonikud
+    // engine and can still hit the closed ORT session; fixing that needs a synthesis
+    // lock/ref-count shared with TtsService and must be validated on-device.
     fun clearLoaded() {
-        clearPhonikud()
-        tts = null
-        folder = ""
+        synchronized(engineLock) {
+            clearPhonikud()
+            tts = null
+            folder = ""
+        }
     }
 
     private fun loadLanguageSettings(context: Context, language: String) {
@@ -137,9 +154,11 @@ object TtsEngine {
     }
 
     fun removeVoiceFromCache(folder: String) {
-        ttsCache.remove(folder)
-        Log.i(TAG, "Removed TTS cache for: $folder")
-        Log.i(TAG, "TTS cache size:"+ ttsCache.size)
+        synchronized(engineLock) {
+            ttsCache.remove(folder)
+            Log.i(TAG, "Removed TTS cache for: $folder")
+            Log.i(TAG, "TTS cache size:" + ttsCache.size)
+        }
     }
 
     private fun initTts(context: Context, lang: String) {

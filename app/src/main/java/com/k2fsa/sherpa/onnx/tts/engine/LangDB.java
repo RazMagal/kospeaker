@@ -133,7 +133,9 @@ public class LangDB extends SQLiteOpenHelper {
         values.put(COLUMN_SPEED, speed);
         values.put(COLUMN_VOLUME, volume);
         database.update(TABLE_NAME, values, COLUMN_FOLDER + " = ?", new String[]{folder});
-        database.close();
+        // Deliberately no database.close(): this is a process-wide singleton helper and
+        // closing its shared connection races concurrent readers ("re-open an already
+        // closed object" from the synthesis thread).
     }
 
     public static LangDB getInstance(Context context) {
@@ -143,18 +145,16 @@ public class LangDB extends SQLiteOpenHelper {
         return instance;
     }
 
-    public void removeLang(String language) {
+    public synchronized void removeLang(String language) {
         SQLiteDatabase db = this.getWritableDatabase();
         db.delete(TABLE_NAME, COLUMN_LANG + " = ?",
                 new String[]{language});
-        db.close();
     }
 
     // Remove a single voice (one row) by its unique model folder.
-    public void removeByFolder(String folder) {
+    public synchronized void removeByFolder(String folder) {
         SQLiteDatabase db = this.getWritableDatabase();
         db.delete(TABLE_NAME, COLUMN_FOLDER + " = ?",
                 new String[]{folder});
-        db.close();
     }
 }
