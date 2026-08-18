@@ -411,6 +411,10 @@ object NumberVerbalizer {
             "\$" -> if (whole == 1L) HE_DOLLAR_S else HE_DOLLAR_P
             else -> HE_EURO // €
         }
+        // Hebrew places the noun BEFORE the numeral for exactly one ("שקל אחד",
+        // not "אחד שקל"). Only for a whole 1 — fractional amounts keep the
+        // number-first form so the decimal reading stays attached to the numeral.
+        if (whole == 1L && dot == -1) return "$word $numWords"
         return "$numWords $word"
     }
 

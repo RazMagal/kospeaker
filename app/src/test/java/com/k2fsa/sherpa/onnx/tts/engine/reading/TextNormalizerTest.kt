@@ -71,9 +71,21 @@ class TextNormalizerTest {
     }
 
     @Test
-    fun spacedEnDashBecomesComma() {
-        // The digits are spelled out first, then the spaced en dash becomes a comma.
-        assertEquals("pages three, five total", TextNormalizer.normalize("pages 3 – 5 total"))
+    fun numericEnDashRangeIsReadAsRange() {
+        // A dash between two numbers is a range, not a pause: "3 – 5" must be
+        // read "three to five", never the list "three, five".
+        assertEquals("pages three to five total", TextNormalizer.normalize("pages 3 – 5 total"))
+        // Unspaced ranges too.
+        assertEquals("pages three to five", TextNormalizer.normalize("pages 3–5"))
+    }
+
+    @Test
+    fun hebrewNumericRangeUsesAd() {
+        // In Hebrew the range word is עד.
+        assertEquals(
+            "בעמודים שלושה עד חמישה",
+            TextNormalizer.normalize("בעמודים 3 – 5"),
+        )
     }
 
     @Test

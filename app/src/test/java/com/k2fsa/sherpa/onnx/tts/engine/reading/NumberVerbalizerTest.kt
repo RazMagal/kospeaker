@@ -152,6 +152,16 @@ class NumberVerbalizerTest {
     }
 
     @Test
+    fun hebrewCurrencyNounBeforeOne() {
+        // For exactly one, Hebrew puts the noun first: "שקל אחד", not "אחד שקל".
+        assertEquals("שקל אחד", he("₪1"))
+        assertEquals("דולר אחד", he("\$1"))
+        // Larger amounts stay number-first with the plural noun.
+        assertEquals("חמישה שקלים", he("5 ₪"))
+        assertEquals("חמישה דולרים", he("\$5"))
+    }
+
+    @Test
     fun hebrewNumberInSentenceIsNotDropped() {
         // The Hebrew MMS voice has no digits, so "3" would vanish; it must become a word.
         assertEquals("יש לי שלושה ספרים", he("יש לי 3 ספרים"))

@@ -27,7 +27,11 @@ package com.k2fsa.sherpa.onnx.tts.engine.reading
  * @property verbalizeNumbers       Spell digit sequences out as words (see
  *                                  [NumberVerbalizer]) so numbers are read aloud
  *                                  naturally. Essential for Hebrew, whose MMS
- *                                  voice has no digits in its vocabulary.
+ *                                  voice has no digits in its vocabulary. Also
+ *                                  rewrites en/em-dash numeric ranges (`3–5`,
+ *                                  `3 – 5`) as spoken ranges ("three to five" /
+ *                                  "שלושה עד חמישה") before verbalizing, so the
+ *                                  range dash is never read as a list comma.
  * @property autoDetectScript       When [script] is `null`, detect the dominant
  *                                  script of the input and adapt the pipeline;
  *                                  when `false` (and [script] is `null`) the
@@ -81,6 +85,15 @@ object TextNormalizer {
 
     /** A spaced em/en dash (or a spaced ASCII double hyphen) acting as a pause. */
     private val SPACED_DASH = Regex("\\s+(?:\\u2014|\\u2013|\\u2015|--)\\s+")
+
+    /**
+     * An en/em/horizontal-bar dash between two numbers is a numeric *range*
+     * (`3–5`, `pages 3 – 5`), not a pause — reading it as a list ("three, five")
+     * misstates the text. Rewritten as a spoken range before number
+     * verbalization. ASCII hyphens are deliberately excluded: `555-1234` is far
+     * more often an identifier (phone number, ISBN) than a range.
+     */
+    private val NUMERIC_RANGE = Regex("(\\d+(?:\\.\\d+)?)\\s*[\\u2013\\u2014\\u2015]\\s*(\\d+(?:\\.\\d+)?)")
 
     /** Any run of whitespace, including Unicode separators like the non-breaking space. */
     private val ANY_WHITESPACE = Regex("[\\p{Z}\\s]+")
@@ -151,7 +164,13 @@ object TextNormalizer {
         if (options.expandAbbreviations && englishAware) s = expandAbbreviations(s)
         // Spell numbers out (script-aware) after the language-specific text steps
         // but before dash/whitespace tidy-up, so the words join up cleanly.
-        if (options.verbalizeNumbers) s = NumberVerbalizer.verbalize(s, script)
+        // Numeric ranges are rewritten first, or the range dash would later be
+        // turned into a pause comma and read as a list.
+        if (options.verbalizeNumbers) {
+            val rangeWord = if (script == TextScript.HEBREW) "עד" else "to"
+            s = NUMERIC_RANGE.replace(s) { m -> "${m.groupValues[1]} $rangeWord ${m.groupValues[2]}" }
+            s = NumberVerbalizer.verbalize(s, script)
+        }
         if (options.dashesToPauses) s = SPACED_DASH.replace(s, ", ")
         if (options.collapseWhitespace) s = collapseWhitespace(s)
 
